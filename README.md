@@ -38,16 +38,20 @@ Tauri, sin DevTools, es la forma barata de subir la barrera si hace falta.
 | 1 | AST, lexer/parser PSeInt, printer, intérprete paso a paso | **Hecho** |
 | 2 | Layout determinista y diagrama SVG con pan/zoom | **Hecho** |
 | 3 | Edición gráfica bidireccional (puntos `+`, paleta, editor de expresiones) | **Hecho** |
-| 4 | Identidad local, OPFS, guardar/cargar `.algx` | Pendiente |
+| 4 | Identidad local, OPFS, guardar/cargar `.algx` | **Hecho** |
 | 5 | Cifrado y modo profesor | Pendiente |
 | 6 | Anti-copia, bitácora, pulido | Pendiente |
 
 Ahora mismo la app **edita en las dos direcciones**: se escribe pseudocódigo y
 el diagrama se redibuja, o se arma el diagrama tocando símbolos y el
-pseudocódigo se regenera. Y ejecuta, con la entrada de datos por diálogo.
+pseudocódigo se regenera. Ejecuta, guarda en el dispositivo, exporta e importa
+`.algx`, y recuerda quién es el alumno.
 
-Falta todo lo de guardar y entregar: identidad, archivos `.algx`, cifrado y
-modo profesor (fases 4 a 6).
+> **Todavía no se puede usar en un curso real.** Los archivos `.algx` de esta
+> versión **no están cifrados**: se abren con cualquier editor de texto y los
+> alumnos pueden intercambiárselos. La protección y el modo profesor son las
+> fases 5 y 6. La app y el diálogo de borrado lo dicen en pantalla; no cambies
+> esos textos hasta que el cifrado exista de verdad.
 
 ---
 
@@ -100,7 +104,9 @@ consecuencia del diseño y no un problema de sincronización.
 | `src/core/` | `ast.ts`, `lexer.ts`, `parser.ts`, `printer.ts`, `interpreter.ts` |
 | `src/chart/` | `layout.ts` (geometría determinista), `Diagram.svelte` (render SVG) |
 | `src/edit/` | `mutaciones.ts`, `documento.svelte.ts`, paleta e inspectores |
-| `src/ui/` | Ejemplos y piezas de interfaz |
+| `src/identity/` | Identidad del alumno, bienvenida y borrado de datos |
+| `src/file/` | Formato `.algx`, almacenes, biblioteca y transferencia |
+| `src/ui/` | Ejemplos, menú y piezas de interfaz |
 | `tests/` | Ciclo de ida y vuelta, intérprete, layout, mutaciones, documento, comentarios |
 
 Decisiones que conviene no deshacer sin pensarlo:
@@ -122,6 +128,13 @@ Decisiones que conviene no deshacer sin pensarlo:
   Svelte envuelve el objeto en un Proxy, y `structuredClone` no puede clonar un
   Proxy: falla con `DataCloneError`. Como el árbol siempre se reemplaza entero,
   la reactividad profunda además no aporta nada.
+- **El almacenamiento se define como interfaz, no como llamada directa.**
+  IndexedDB y OPFS no existen en Node; sin `AlmacenIdentidad` y
+  `AlmacenArchivos` con implementaciones en memoria, toda la lógica de guardado
+  quedaría sin pruebas, que es justo donde un error le cuesta al alumno su trabajo.
+- **El borrador se guarda como texto, no como árbol.** Lo que hay que recuperar
+  tras un cierre accidental es exactamente lo que el alumno tenía escrito,
+  aunque no compile — y un árbol no puede representar código a medias.
 - **Los comentarios viven en el AST**, no en el texto. La edición gráfica
   reimprime el pseudocódigo completo en cada cambio; si no estuvieran en el
   árbol, el primer clic en el diagrama borraría lo que el alumno escribió.
@@ -167,9 +180,41 @@ hace lo que uno espera.
 - No se puede editar gráficamente mientras el pseudocódigo tiene errores:
   reimprimir el árbol borraría lo que se está escribiendo a medias.
 
+## Identidad y archivos
+
+- En el primer arranque se piden **número de control y nombre**. No hay cuenta
+  ni servidor: quedan en el dispositivo y viajan dentro de cada `.algx`.
+- El número de control se acepta con el formato de cualquier escuela (letras y
+  dígitos, 4 a 20 caracteres); casarse con un formato dejaría la app inservible
+  para otra institución.
+- El `deviceId` es aleatorio y **no se deriva** del número de control: si se
+  derivara, conocer el número de un compañero bastaría para rehacer su identidad.
+  Es además lo que delata dos entregas salidas del mismo dispositivo.
+- Los algoritmos se guardan en **OPFS**, con nombre de archivo aleatorio y el
+  título dentro: así renombrar no mueve archivos ni pisa otro que se llame igual.
+- **Borrador automático**: el trabajo en curso se guarda cada 1,2 s y se
+  recupera al volver a abrir, aunque tenga errores de sintaxis.
+- **Borrar mis datos** exige escribir `BORRAR`, dice exactamente qué se pierde y
+  —hoy— advierte con honestidad que los `.algx` ya exportados **no** están
+  protegidos. Ese texto cambia cuando exista el cifrado.
+- Exportar no obliga a guardar antes: construye el archivo al vuelo, porque es
+  el paso que el alumno olvidaría justo al entregar.
+
+### El formato `.algx`
+
+Contenedor JSON con dos partes:
+
+| Parte | Contenido | Por qué |
+|---|---|---|
+| `encabezado` | autor, `deviceId`, título, fechas, versión | Siempre en claro: el profesor ordena un lote y detecta duplicados sin descifrar nada |
+| `contenido` | el AST y la bitácora | Hoy en claro; en la fase 5 pasa a llevar el sobre cifrado **sin cambiar el contenedor** |
+
+El campo `alg` dice cómo está protegido. Hoy vale `"ninguno"`; un archivo con
+otro valor se rechaza con un mensaje claro en vez de fallar de forma rara.
+
 ## Pruebas
 
-211 pruebas, sin dependencias del navegador:
+248 pruebas, sin dependencias del navegador:
 
 - **Ida y vuelta**: sobre 16 algoritmos, `parse → print → parse` devuelve el
   mismo árbol, imprimir es idempotente y los ids no se repiten. Es la red de
@@ -187,6 +232,11 @@ hace lo que uno espera.
   gráfica reimprime, los ids sobreviven, y deshacer/rehacer encadena bien.
 - **Comentarios**: sobreviven al ciclo en línea propia, al final de la línea y
   al final de un bloque, y el conteo se conserva.
+- **Identidad**: se aceptan formatos de varias escuelas, se normaliza el número
+  de control, y dos identidades con el mismo número tienen `deviceId` distinto.
+- **Formato y biblioteca**: el ciclo guardar/leer conserva todo, sobrescribir no
+  reinicia la fecha de creación, un archivo dañado no oculta a los demás, y el
+  borrador conserva texto que no compila.
 
 ---
 
@@ -194,6 +244,9 @@ hace lo que uno espera.
 
 - Probar en un Android y un iPhone **reales**, instalando desde la pantalla de
   inicio, en modo avión, y comprobando que los datos sobreviven varios días.
+  Es la comprobación que ninguna prueba automática sustituye: OPFS e IndexedDB
+  se comportan distinto en Safari, y el desalojo de datos de iOS solo se ve con
+  el tiempo real pasando.
 - Sustituir los iconos PNG de relleno de `public/` por los definitivos.
 - Cambiar el `<textarea>` por CodeMirror 6, necesario para bloquear el
   portapapeles dentro del editor (fase 6). Al hacerlo hay que comprobar que

@@ -6,21 +6,64 @@
     * muestran lado a lado; en móvil se alternan con pestañas, porque partir una
     * pantalla de 375 px en dos no sirve para ninguna de las dos.
     */
+   import { onMount } from 'svelte';
    import Diagram from './chart/Diagram.svelte';
    import Paleta from './edit/Paleta.svelte';
    import EditorSentencia from './edit/EditorSentencia.svelte';
+   import Bienvenida from './identity/Bienvenida.svelte';
+   import BorrarDatos from './identity/BorrarDatos.svelte';
+   import PanelArchivos from './file/PanelArchivos.svelte';
+   import MenuPrincipal from './ui/MenuPrincipal.svelte';
+   import PedirTexto from './ui/PedirTexto.svelte';
    import { layout, type InsertPoint } from './chart/layout';
    import { run, type Effect, RuntimeError } from './core/interpreter';
    import type { ParseError } from './core/parser';
+   import { print } from './core/printer';
    import type { Program } from './core/ast';
    import { Documento } from './edit/documento.svelte';
    import { crearSentencia, insertar, type Posicion, type TipoSentencia } from './edit/mutaciones';
+   import { crearIdentidad, type Identidad } from './identity/identidad';
+   import {
+      almacenArchivosEnMemoria,
+      almacenArchivosOPFS,
+      almacenIdentidadIndexedDB,
+      hayOPFS,
+      pedirPersistencia,
+   } from './file/almacenes';
+   import { Biblioteca } from './file/biblioteca.svelte';
+   import { crearArchivo, nombreSugerido, serializar } from './file/algx';
+   import { descargar } from './file/transferencia';
+   import { APP_VERSION } from './ui/version';
    import { EJEMPLO_INICIAL } from './ui/ejemplos';
 
    type Vista = 'codigo' | 'diagrama';
    type LineaSalida = { texto: string; tipo: 'salida' | 'error' | 'info' };
 
    const doc = new Documento(EJEMPLO_INICIAL);
+
+   const almacenIdentidad = almacenIdentidadIndexedDB();
+   // Sin OPFS no se puede guardar entre sesiones, pero la app debe seguir
+   // siendo usable: se cae a un almacén en memoria y se avisa.
+   const biblioteca = new Biblioteca(
+      hayOPFS() ? almacenArchivosOPFS() : almacenArchivosEnMemoria(),
+      APP_VERSION,
+   );
+
+   let identidad = $state<Identidad | null>(null);
+   let arrancando = $state(true);
+   let sinAlmacenamiento = $state(false);
+   let restauradoDeBorrador = false;
+
+   /** Archivo de la biblioteca que está abierto, si lo hay. */
+   let archivoAbiertoId = $state<string | undefined>(undefined);
+   let tituloActual = $state('Sin título');
+
+   let menuAbierto = $state(false);
+   let panelArchivos = $state(false);
+   let borrandoDatos = $state(false);
+   /** Cuando no es null, se está pidiendo un título para guardar. */
+   let pidiendoTitulo = $state<{ como: boolean } | null>(null);
+   let aviso = $state<string | null>(null);
 
    let vista = $state<Vista>('diagrama');
    let salida = $state<LineaSalida[]>([]);
@@ -46,6 +89,186 @@
     * el alumno está escribiendo a medias.
     */
    const editable = $derived(!ejecutando && doc.errores.length === 0);
+
+   // -- Arranque ------------------------------------------------------------
+
+   onMount(async () => {
+      sinAlmacenamiento = !hayOPFS();
+      try {
+         identidad = await almacenIdentidad.leer();
+      } catch {
+         // Con IndexedDB bloqueado (modo privado de algunos navegadores) no se
+         // puede recordar la identidad, pero se puede trabajar en la sesión.
+         identidad = null;
+         sinAlmacenamiento = true;
+      }
+
+      if (identidad) {
+         await biblioteca.refrescar(identidad.deviceId);
+
+         // Recuperar el trabajo en curso. Se hace antes de mostrar nada para
+         // que el alumno no vea aparecer el ejemplo y luego cambiar solo.
+         const borrador = await biblioteca.leerBorrador();
+         if (borrador) {
+            doc.cargar(borrador.texto);
+            tituloActual = borrador.titulo;
+            archivoAbiertoId = borrador.archivoId;
+            restauradoDeBorrador = true;
+         }
+      }
+      arrancando = false;
+
+      if (restauradoDeBorrador) {
+         anunciar('Se recuperó tu trabajo sin guardar');
+      }
+   });
+
+   /**
+    * Guarda el borrador cuando el documento cambia, con un respiro para no
+    * escribir en disco en cada tecla.
+    *
+    * Se guarda el texto y no el árbol a propósito: lo que hay que recuperar es
+    * exactamente lo que el alumno tenía escrito, aunque no compile.
+    */
+   $effect(() => {
+      const texto = doc.texto;
+      const titulo = tituloActual;
+      const archivoId = archivoAbiertoId;
+
+      if (arrancando || !identidad) return;
+
+      const temporizador = setTimeout(() => {
+         void biblioteca.guardarBorrador({ texto, titulo, archivoId });
+      }, 1200);
+
+      return () => clearTimeout(temporizador);
+   });
+
+   async function registrar(datos: {
+      numeroControl: string;
+      nombre: string;
+      grupo?: string;
+   }) {
+      const nueva = crearIdentidad(datos, () => crypto.randomUUID());
+      try {
+         await almacenIdentidad.guardar(nueva);
+      } catch {
+         sinAlmacenamiento = true;
+      }
+      identidad = nueva;
+      // Se pide justo aquí, tras un gesto del usuario: es cuando el navegador
+      // es más propenso a concederla.
+      await pedirPersistencia();
+      await biblioteca.refrescar(nueva.deviceId);
+   }
+
+   // -- Archivos ------------------------------------------------------------
+
+   function anunciar(texto: string) {
+      aviso = texto;
+      setTimeout(() => {
+         if (aviso === texto) aviso = null;
+      }, 4000);
+   }
+
+   async function guardar(titulo?: string) {
+      if (!identidad) return;
+
+      // Sin título previo hay que pedirlo: guardar en silencio con un nombre
+      // inventado deja al alumno con una lista de «Sin título».
+      if (!titulo && !archivoAbiertoId) {
+         pidiendoTitulo = { como: false };
+         return;
+      }
+
+      try {
+         const id = await biblioteca.guardar({
+            programa: doc.programa,
+            titulo: titulo ?? tituloActual,
+            identidad,
+            id: titulo ? undefined : archivoAbiertoId,
+         });
+         archivoAbiertoId = id;
+         if (titulo) tituloActual = titulo;
+         anunciar(`Guardado «${tituloActual}»`);
+      } catch (e) {
+         anunciar(e instanceof Error ? e.message : 'No se pudo guardar.');
+      }
+   }
+
+   async function abrirArchivo(id: string) {
+      try {
+         const archivo = await biblioteca.abrir(id);
+         // Se carga como texto para que el árbol y el pseudocódigo queden
+         // consistentes desde el primer momento.
+         doc.cargar(print(archivo.contenido.programa));
+         archivoAbiertoId = id;
+         tituloActual = archivo.encabezado.titulo;
+         nodoSeleccionado = undefined;
+         panelArchivos = false;
+         anunciar(`Abierto «${tituloActual}»`);
+      } catch (e) {
+         anunciar(e instanceof Error ? e.message : 'No se pudo abrir.');
+      }
+   }
+
+   function nuevoAlgoritmo() {
+      doc.cargar(EJEMPLO_INICIAL);
+      archivoAbiertoId = undefined;
+      tituloActual = 'Sin título';
+      nodoSeleccionado = undefined;
+      menuAbierto = false;
+      anunciar('Algoritmo nuevo');
+   }
+
+   /** Vuelve a arrancar limpio tras borrar los datos. */
+   async function reiniciarDocumento() {
+      await biblioteca.borrarBorrador();
+      doc.cargar(EJEMPLO_INICIAL);
+      archivoAbiertoId = undefined;
+      tituloActual = 'Sin título';
+   }
+
+   /**
+    * Exporta el algoritmo actual, esté guardado o no.
+    * Se construye el archivo al vuelo para no obligar a guardar antes de
+    * entregar: es un paso extra que el alumno olvidaría justo al final.
+    */
+   function exportar() {
+      if (!identidad) return;
+      menuAbierto = false;
+
+      const archivo = crearArchivo({
+         programa: doc.programa,
+         titulo: tituloActual,
+         autor: {
+            numeroControl: identidad.numeroControl,
+            nombre: identidad.nombre,
+            ...(identidad.grupo ? { grupo: identidad.grupo } : {}),
+         },
+         deviceId: identidad.deviceId,
+         appVersion: APP_VERSION,
+      });
+
+      const nombre = nombreSugerido(archivo.encabezado);
+      descargar(nombre, serializar(archivo));
+      anunciar(`Se descargó ${nombre}`);
+   }
+
+   async function borrarDatos() {
+      try {
+         await almacenIdentidad.borrar();
+      } catch {
+         // Si no se pudo tocar IndexedDB igual se limpia la sesión.
+      }
+      await biblioteca.borrarTodo();
+
+      await reiniciarDocumento();
+      identidad = null;
+      borrandoDatos = false;
+      menuAbierto = false;
+      panelArchivos = false;
+   }
 
    // -- Edición gráfica -----------------------------------------------------
 
@@ -205,6 +428,11 @@
 
 <svelte:window onkeydown={atajos} />
 
+{#if arrancando}
+   <div class="arrancando">Cargando…</div>
+{:else if !identidad}
+   <Bienvenida onListo={registrar} />
+{:else}
 <div class="app">
    <header>
       <div class="marca">
@@ -230,6 +458,15 @@
             ↷
          </button>
       </div>
+
+      <button
+         class="menu"
+         onclick={() => (menuAbierto = true)}
+         aria-label="Menú y archivos"
+         title="Menú y archivos"
+      >
+         ⋮
+      </button>
 
       <div class="pestanas" role="tablist">
          <button
@@ -362,7 +599,81 @@
          </form>
       </div>
    {/if}
+
+   {#if menuAbierto}
+      <MenuPrincipal
+         {identidad}
+         {tituloActual}
+         hayArchivoAbierto={archivoAbiertoId !== undefined}
+         onGuardar={() => {
+            menuAbierto = false;
+            guardar();
+         }}
+         onGuardarComo={() => {
+            menuAbierto = false;
+            pidiendoTitulo = { como: true };
+         }}
+         onNuevo={nuevoAlgoritmo}
+         onArchivos={() => {
+            menuAbierto = false;
+            panelArchivos = true;
+         }}
+         onExportar={exportar}
+         onBorrarDatos={() => {
+            menuAbierto = false;
+            borrandoDatos = true;
+         }}
+         onCerrar={() => (menuAbierto = false)}
+      />
+   {/if}
+
+   {#if panelArchivos}
+      <div class="capa-archivos">
+         <PanelArchivos
+            {biblioteca}
+            abiertoId={archivoAbiertoId}
+            deviceId={identidad.deviceId}
+            onAbrir={abrirArchivo}
+            onCerrar={() => (panelArchivos = false)}
+         />
+      </div>
+   {/if}
+
+   {#if pidiendoTitulo}
+      <PedirTexto
+         titulo={pidiendoTitulo.como ? 'Guardar una copia' : 'Guardar algoritmo'}
+         etiqueta="Nombre del algoritmo"
+         valorInicial={pidiendoTitulo.como ? `${tituloActual} (copia)` : ''}
+         textoBoton="Guardar"
+         onAceptar={(titulo) => {
+            pidiendoTitulo = null;
+            guardar(titulo);
+         }}
+         onCancelar={() => (pidiendoTitulo = null)}
+      />
+   {/if}
+
+   {#if borrandoDatos}
+      <BorrarDatos
+         {identidad}
+         guardados={biblioteca.archivos.length}
+         onConfirmar={borrarDatos}
+         onCancelar={() => (borrandoDatos = false)}
+      />
+   {/if}
+
+   {#if aviso}
+      <div class="aviso-flotante" role="status">{aviso}</div>
+   {/if}
+
+   {#if sinAlmacenamiento}
+      <div class="aviso-flotante persistente" role="alert">
+         Este navegador no deja guardar en el dispositivo. Podrás trabajar y exportar,
+         pero lo guardado se perderá al cerrar.
+      </div>
+   {/if}
 </div>
+{/if}
 
 <style>
    .app {
@@ -693,6 +1004,69 @@
       font-size: 15px;
    }
 
+   .arrancando {
+      display: grid;
+      place-items: center;
+      height: 100dvh;
+      color: var(--texto-debil);
+      font-size: 14px;
+   }
+
+   .menu {
+      border: 1px solid var(--borde);
+      background: transparent;
+      color: var(--texto);
+      border-radius: 8px;
+      width: 34px;
+      height: 34px;
+      font-size: 17px;
+      line-height: 1;
+      cursor: pointer;
+      flex-shrink: 0;
+   }
+   .menu:hover {
+      background: var(--superficie-alta);
+   }
+
+   /* Panel de archivos: lateral en PC, hoja casi completa en móvil. */
+   .capa-archivos {
+      position: fixed;
+      z-index: 45;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 340px;
+      border-left: 1px solid var(--borde);
+      box-shadow: -10px 0 30px rgb(0 0 0 / 0.2);
+   }
+
+   .aviso-flotante {
+      position: fixed;
+      left: 50%;
+      bottom: 22px;
+      transform: translateX(-50%);
+      z-index: 70;
+      max-width: min(90vw, 420px);
+      background: var(--superficie-alta);
+      color: var(--texto);
+      border: 1px solid var(--borde);
+      border-radius: 999px;
+      padding: 9px 18px;
+      font-size: 13px;
+      text-align: center;
+      box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+      pointer-events: none;
+   }
+   .aviso-flotante.persistente {
+      bottom: auto;
+      top: 64px;
+      border-radius: 12px;
+      border-color: var(--aviso-borde);
+      background: var(--aviso-fondo);
+      color: var(--aviso-texto);
+      line-height: 1.45;
+   }
+
    /* --- Móvil: una vista a la vez ------------------------------------- */
    @media (max-width: 860px) {
       /*
@@ -721,9 +1095,21 @@
          padding: 9px 13px;
          font-size: 15px;
       }
-      .historial button {
+      .historial button,
+      .menu {
          width: 32px;
          height: 32px;
+      }
+
+      .capa-archivos {
+         left: 0;
+         top: auto;
+         width: auto;
+         height: 85dvh;
+         border-left: 0;
+         border-top: 1px solid var(--borde);
+         border-radius: 16px 16px 0 0;
+         overflow: hidden;
       }
 
       main {
@@ -756,6 +1142,16 @@
    /* En pantallas anchas las pestañas no hacen falta. */
    @media (min-width: 861px) {
       .pestanas {
+         display: none;
+      }
+   }
+
+   /*
+    * Por debajo de 520 px el nombre de la app deja sitio a lo que sí se usa.
+    * Con el botón de menú añadido, la barra ya no daba de sí.
+    */
+   @media (max-width: 520px) {
+      .marca {
          display: none;
       }
    }
