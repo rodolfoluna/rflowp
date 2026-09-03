@@ -16,7 +16,6 @@
  */
 
 import {
-   childBlocks,
    type Expression,
    type NodeId,
    type Program,
@@ -260,7 +259,7 @@ export function layout(program: Program): Diagram {
  * Entre cada par (y en los extremos) deja un punto de inserción.
  */
 function layoutBlock(statements: Statement[], ownerId: NodeId, blockKey: string): Frame {
-   const { gapY, symbolWidth, symbolHeight } = METRICS;
+   const { gapY, symbolWidth } = METRICS;
 
    // Un bloque vacío sigue necesitando alto para que la flecha se vea y para
    // poder ofrecer el `+` que permite empezar a llenarlo.
@@ -308,7 +307,6 @@ function layoutBlock(statements: Statement[], ownerId: NodeId, blockKey: string)
 
    result.width = width;
    result.height = y;
-   void symbolHeight;
    return result;
 }
 

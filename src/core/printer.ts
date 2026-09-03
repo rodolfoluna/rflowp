@@ -15,9 +15,12 @@ import { type Expression, type Program, type Statement } from './ast';
 export interface PrintOptions {
    /** Espacios por nivel de anidamiento. */
    indent?: number;
-   /** Comentarios por línea del código original, para no perderlos. */
-   comments?: Map<number, string>;
 }
+
+// PENDIENTE: reinsertar los comentarios. El parser ya los recolecta en
+// `ParseResult.comments`, pero el printer todavía no los emite, así que un
+// viaje por el diagrama los pierde. Hay que resolverlo antes de la fase 3,
+// cuando la edición gráfica empiece a reescribir el texto de verdad.
 
 const DEFAULT_INDENT = 3;
 

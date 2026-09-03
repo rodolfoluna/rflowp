@@ -243,6 +243,13 @@
             {@const lines = wrap(s.label, s)}
             {@const activo = s.nodeId !== undefined && s.nodeId === activeNodeId}
             {@const seleccionado = s.nodeId !== undefined && s.nodeId === selectedNodeId}
+            <!--
+               `role` y `tabindex` van siempre juntos: o ambos definidos (el
+               símbolo es seleccionable) o ambos `undefined` (Inicio y Fin, que
+               no representan ninguna sentencia). El analizador no puede probar
+               que la condición es la misma en las dos líneas.
+            -->
+            <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
             <g
                class="simbolo {s.kind}"
                class:activo

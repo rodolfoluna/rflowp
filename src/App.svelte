@@ -167,7 +167,7 @@
          <span class="sub">Algoritmos</span>
       </div>
 
-      <nav class="pestanas" role="tablist">
+      <div class="pestanas" role="tablist">
          <button
             role="tab"
             aria-selected={vista === 'codigo'}
@@ -184,7 +184,7 @@
          >
             Diagrama
          </button>
-      </nav>
+      </div>
 
       <button class="ejecutar" onclick={ejecutar} disabled={ejecutando}>
          {ejecutando ? 'Ejecutando…' : '▶ Ejecutar'}

@@ -51,12 +51,6 @@ export interface ParseResult {
    comments: Map<number, string>;
 }
 
-/** Tokens que abren una sentencia; sirven como puntos de resincronización. */
-const STATEMENT_STARTERS: ReadonlySet<TokenType> = new Set<TokenType>([
-   'Definir', 'Dimension', 'Leer', 'Escribir', 'Si', 'Mientras',
-   'Repetir', 'Para', 'Segun', 'Identificador', 'FinProceso',
-]);
-
 /** Tokens que cierran un bloque; el parser de bloque se detiene al verlos. */
 const BLOCK_ENDERS: ReadonlySet<TokenType> = new Set<TokenType>([
    'FinProceso', 'FinSi', 'SiNo', 'FinMientras', 'FinPara', 'FinSegun',
