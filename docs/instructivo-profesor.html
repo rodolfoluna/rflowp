@@ -1,0 +1,531 @@
+<title>RFlowP para el profesor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;600&family=Public+Sans:wght@400;600;700&display=swap">
+
+<style>
+   /*
+    * Hermana de la hoja del alumno, pero en violeta: impresas, no se confunden
+    * ni se reparte por error la que no toca.
+    */
+   :root {
+      --papel: #ffffff;
+      --papel-hueco: #f5f4f8;
+      --tinta: #17141c;
+      --tinta-suave: #58525f;
+      --tinta-tenue: #837d8c;
+      --regla: #dcd8e3;
+
+      --acento: #5b2d90;
+      --acento-hueco: #f0e9f8;
+      --alerta: #a8261f;
+      --alerta-hueco: #fbeceb;
+      --aviso: #7a5300;
+      --aviso-hueco: #fdf3dd;
+
+      --display: 'Bricolage Grotesque', 'Trebuchet MS', sans-serif;
+      --texto: 'Public Sans', -apple-system, 'Segoe UI', sans-serif;
+      --mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace;
+   }
+
+   @media (prefers-color-scheme: dark) {
+      :root:not([data-theme='light']) {
+         --papel: #141216;
+         --papel-hueco: #1e1a23;
+         --tinta: #ece9f0;
+         --tinta-suave: #a9a3b2;
+         --tinta-tenue: #7b7585;
+         --regla: #302b38;
+         --acento: #b492e8;
+         --acento-hueco: #241a33;
+         --alerta: #ff8479;
+         --alerta-hueco: #2c1614;
+         --aviso: #f0c96a;
+         --aviso-hueco: #2b2209;
+      }
+   }
+
+   :root[data-theme='dark'] {
+      --papel: #141216;
+      --papel-hueco: #1e1a23;
+      --tinta: #ece9f0;
+      --tinta-suave: #a9a3b2;
+      --tinta-tenue: #7b7585;
+      --regla: #302b38;
+      --acento: #b492e8;
+      --acento-hueco: #241a33;
+      --alerta: #ff8479;
+      --alerta-hueco: #2c1614;
+      --aviso: #f0c96a;
+      --aviso-hueco: #2b2209;
+   }
+
+   * { box-sizing: border-box; }
+
+   body {
+      margin: 0;
+      background: var(--papel);
+      color: var(--tinta);
+      font-family: var(--texto);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+   }
+
+   .hoja {
+      max-width: 940px;
+      margin: 0 auto;
+      padding: 32px 28px 44px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+   }
+
+   header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+      border-bottom: 3px solid var(--acento);
+      padding-bottom: 12px;
+   }
+
+   h1 {
+      font-family: var(--display);
+      font-weight: 800;
+      font-size: clamp(28px, 5vw, 40px);
+      line-height: 1.02;
+      letter-spacing: -0.025em;
+      margin: 0;
+      text-wrap: balance;
+   }
+   h1 em { font-style: normal; color: var(--acento); }
+
+   .marca {
+      text-align: right;
+      font-size: 11px;
+      color: var(--tinta-tenue);
+      line-height: 1.45;
+   }
+   .marca strong {
+      display: block;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--tinta-suave);
+      letter-spacing: 0.02em;
+   }
+
+   .entrada {
+      margin: 0;
+      font-size: 15px;
+      color: var(--tinta-suave);
+      max-width: 64ch;
+   }
+
+   ol.pasos {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+      gap: 18px 26px;
+      counter-reset: paso;
+   }
+
+   ol.pasos > li {
+      counter-increment: paso;
+      display: grid;
+      grid-template-columns: 30px 1fr;
+      gap: 4px 11px;
+      align-content: start;
+   }
+
+   ol.pasos > li::before {
+      content: counter(paso);
+      grid-row: 1 / span 2;
+      font-family: var(--display);
+      font-weight: 800;
+      font-size: 21px;
+      line-height: 1;
+      color: var(--acento);
+      border-top: 2px solid var(--acento);
+      padding-top: 5px;
+      font-variant-numeric: tabular-nums;
+   }
+
+   ol.pasos h2 {
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 16px;
+      letter-spacing: -0.01em;
+      margin: 0;
+      padding-top: 3px;
+      text-wrap: balance;
+   }
+
+   ol.pasos .cuerpo {
+      grid-column: 2;
+      font-size: 13.5px;
+      color: var(--tinta-suave);
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+   }
+   ol.pasos p { margin: 0; }
+
+   kbd {
+      font-family: var(--mono);
+      font-size: 11.5px;
+      font-weight: 600;
+      background: var(--papel-hueco);
+      border: 1px solid var(--regla);
+      border-radius: 4px;
+      padding: 1px 5px;
+      color: var(--tinta);
+      white-space: nowrap;
+   }
+
+   code {
+      font-family: var(--mono);
+      font-size: 12.5px;
+      color: var(--acento);
+      font-weight: 600;
+   }
+
+   /* ---- Señales del panel: una tabla, porque se consulta ---- */
+   .senales {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+   }
+   .senales > h2 {
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 16px;
+      margin: 0;
+   }
+
+   table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+   }
+   th, td {
+      text-align: left;
+      padding: 6px 10px 6px 0;
+      border-bottom: 1px solid var(--regla);
+      vertical-align: top;
+   }
+   thead th {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--tinta-tenue);
+      font-weight: 600;
+      border-bottom-width: 2px;
+   }
+   td:first-child {
+      font-weight: 700;
+      color: var(--tinta);
+      white-space: nowrap;
+      padding-right: 14px;
+   }
+   td:nth-child(2) { color: var(--tinta-suave); }
+   .fuerza {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+   }
+   .fuerza.alta { color: var(--alerta); }
+   .fuerza.media { color: var(--aviso); }
+
+   .avisos {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 14px;
+   }
+
+   .aviso {
+      border-left: 3px solid var(--aviso);
+      background: var(--aviso-hueco);
+      padding: 11px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+   }
+   .aviso.grave {
+      border-left-color: var(--alerta);
+      background: var(--alerta-hueco);
+   }
+   .aviso h3 {
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 14px;
+      margin: 0;
+      color: var(--aviso);
+   }
+   .aviso.grave h3 { color: var(--alerta); }
+   .aviso p {
+      margin: 0;
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: var(--tinta-suave);
+   }
+   .aviso ul {
+      margin: 2px 0 0;
+      padding-left: 16px;
+      font-size: 12.5px;
+      color: var(--tinta-suave);
+      line-height: 1.5;
+   }
+
+   footer {
+      border-top: 1px solid var(--regla);
+      padding-top: 12px;
+      font-size: 11.5px;
+      color: var(--tinta-tenue);
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+   }
+   footer .huella {
+      font-family: var(--mono);
+      letter-spacing: 0.06em;
+   }
+   footer .huella span {
+      border-bottom: 1px solid var(--regla);
+      min-width: 150px;
+      display: inline-block;
+   }
+
+   @page { margin: 12mm; }
+
+   @media print {
+      :root {
+         --papel: #ffffff;
+         --papel-hueco: #f3f2f6;
+         --tinta: #000000;
+         --tinta-suave: #322e38;
+         --tinta-tenue: #605a68;
+         --regla: #ccc7d4;
+         --acento: #43206c;
+         --alerta: #8f1f19;
+         --aviso: #6b4800;
+         --aviso-hueco: #ffffff;
+         --alerta-hueco: #ffffff;
+         --acento-hueco: #ffffff;
+      }
+      body { font-size: 10.2pt; line-height: 1.36; }
+      .hoja { padding: 0; gap: 12px; max-width: none; }
+      h1 { font-size: 26pt; }
+      .entrada { font-size: 10.6pt; }
+      ol.pasos { gap: 11px 22px; }
+      ol.pasos h2 { font-size: 11.4pt; }
+      ol.pasos .cuerpo { font-size: 9.6pt; }
+      table { font-size: 9.2pt; }
+      .aviso { border-left-width: 2.5px; padding: 8px 11px; break-inside: avoid; }
+      .aviso p, .aviso ul { font-size: 9.2pt; }
+      ol.pasos > li, .senales { break-inside: avoid; }
+   }
+</style>
+
+<div class="hoja">
+   <header>
+      <h1>RFlowP<br><em>para el profesor</em></h1>
+      <p class="marca">
+         <strong>Guía del curso</strong>
+         Llaves, entregas y revisión<br>
+         No repartir a los alumnos
+      </p>
+   </header>
+
+   <p class="entrada">
+      La app es la misma que usan tus alumnos; lo que la pone en modo profesor es tener
+      cargada la llave privada del curso. Con ella abres cualquier entrega y revisas el lote
+      completo.
+   </p>
+
+   <ol class="pasos">
+      <li>
+         <h2>Genera el par de llaves</h2>
+         <div class="cuerpo">
+            <p>
+               Una sola vez por curso. Menú <kbd>⋮</kbd> → <em>Llave del curso</em>, ponle nombre
+               (por ejemplo <code>Algoritmos 3A 2026</code>) y pulsa <em>Generar</em>.
+            </p>
+            <p>Se descargan dos archivos: uno <strong>PRIVADO</strong> y uno público.</p>
+         </div>
+      </li>
+
+      <li>
+         <h2>Respalda la privada en dos lugares</h2>
+         <div class="cuerpo">
+            <p>
+               Por ejemplo tu computadora y una memoria USB, o tu computadora y tu nube
+               personal. Hazlo <strong>hoy</strong>, no después.
+            </p>
+            <p>Nunca la compartas ni la subas a un lugar donde entren los alumnos.</p>
+         </div>
+      </li>
+
+      <li>
+         <h2>Reparte la pública el primer día</h2>
+         <div class="cuerpo">
+            <p>
+               Antes de que nadie empiece a trabajar. Dales el archivo público por el medio que
+               uses normalmente; no tiene nada secreto.
+            </p>
+            <p>
+               Diles que la importen desde <em>Llave del curso</em> → <em>Importar llave</em>, y
+               que te confirmen la <strong>huella</strong> que aparece: debe ser idéntica a la tuya.
+            </p>
+         </div>
+      </li>
+
+      <li>
+         <h2>Recibe las entregas</h2>
+         <div class="cuerpo">
+            <p>
+               Cada alumno exporta un archivo <code>.algx</code> con su número de control en el
+               nombre. Recógelos como recojas todo lo demás: correo, Classroom, USB.
+            </p>
+            <p>Van cifrados; solo tú y su autor pueden abrirlos.</p>
+         </div>
+      </li>
+
+      <li>
+         <h2>Revisa el lote</h2>
+         <div class="cuerpo">
+            <p>
+               Menú <kbd>⋮</kbd> → <em>Revisar entregas</em> → <em>Importar entregas</em>, y
+               selecciona todos los archivos de una vez.
+            </p>
+            <p>
+               Arriba salen los grupos que conviene mirar; abajo, la tabla con la evidencia de
+               cada trabajo. Toca el nombre de un alumno para abrir su algoritmo y ejecutarlo.
+            </p>
+         </div>
+      </li>
+
+      <li>
+         <h2>Si un alumno pierde su aparato</h2>
+         <div class="cuerpo">
+            <p>
+               Eres el único que puede recuperar su trabajo: abre su entrega, y desde ahí puede
+               volver a guardarla en su instalación nueva.
+            </p>
+            <p>
+               Deliberadamente <strong>no hay respaldo del lado del alumno</strong>: una llave que
+               se puede guardar es una llave que se puede prestar.
+            </p>
+         </div>
+      </li>
+   </ol>
+
+   <section class="senales">
+      <h2>Qué significa cada señal del panel</h2>
+      <table>
+         <thead>
+            <tr>
+               <th>Señal</th>
+               <th>Qué indica</th>
+               <th>Fuerza</th>
+            </tr>
+         </thead>
+         <tbody>
+            <tr>
+               <td>Mismo dispositivo</td>
+               <td>
+                  Dos entregas a nombre de alumnos distintos se crearon en el mismo aparato.
+                  Es lo más difícil de esquivar.
+               </td>
+               <td class="fuerza alta">Fuerte</td>
+            </tr>
+            <tr>
+               <td>Mismo algoritmo</td>
+               <td>
+                  El código coincide ignorando nombres de variables, mensajes y comentarios:
+                  es decir, todo lo que cambia quien transcribe a mano.
+               </td>
+               <td class="fuerza alta">Fuerte</td>
+            </tr>
+            <tr>
+               <td>Alterado</td>
+               <td>
+                  El encabezado del archivo no coincide con su firma: alguien editó el nombre,
+                  el número de control o la fecha después de generarlo.
+               </td>
+               <td class="fuerza alta">Fuerte</td>
+            </tr>
+            <tr>
+               <td>Poco trabajo / revisar</td>
+               <td>
+                  Muy pocos minutos y muy pocas ediciones para el tamaño del algoritmo. Un
+                  trabajo escrito de verdad acumula cientos de cambios.
+               </td>
+               <td class="fuerza media">Indicio</td>
+            </tr>
+            <tr>
+               <td>Pegar</td>
+               <td>
+                  Intentos de pegar texto que la app bloqueó mientras se escribía ese trabajo.
+               </td>
+               <td class="fuerza media">Indicio</td>
+            </tr>
+         </tbody>
+      </table>
+   </section>
+
+   <div class="avisos">
+      <div class="aviso grave">
+         <h3>Si pierdes la llave privada, se acabó</h3>
+         <p>
+            Ninguna entrega de ese curso se vuelve a abrir. Ni tú, ni el alumno, ni nadie. No
+            existe una copia en ningún servidor porque no hay servidor.
+         </p>
+      </div>
+
+      <div class="aviso">
+         <h3>Las señales ordenan, no acusan</h3>
+         <p>
+            Dos alumnos pueden resolver igual un ejercicio sencillo, y en los primeros temas
+            es lo normal. Los umbrales están puestos a propósito del lado indulgente: es
+            preferible dejar pasar una copia que señalar a quien sí trabajó. Habla con el
+            alumno antes de concluir nada.
+         </p>
+      </div>
+
+      <div class="aviso">
+         <h3>Qué protege de verdad</h3>
+         <ul>
+            <li>Un alumno no puede abrir el archivo de otro.</li>
+            <li>Editar un archivo entregado se detecta.</li>
+            <li>Borrar sus datos le deja sus archivos ilegibles, sin vuelta atrás.</li>
+         </ul>
+      </div>
+
+      <div class="aviso">
+         <h3>Qué no protege</h3>
+         <ul>
+            <li>Fotografiar la pantalla y volver a escribirlo a mano.</li>
+            <li>
+               La firma no es una identidad verificada: quien entienda el formato puede
+               fabricar un archivo con el nombre que quiera.
+            </li>
+            <li>El bloqueo de copiar y pegar es fricción, no una barrera.</li>
+         </ul>
+      </div>
+   </div>
+
+   <footer>
+      <div class="huella">Huella de mi llave: <span></span></div>
+      <div>Respaldo 1: __________________ &nbsp; Respaldo 2: __________________</div>
+   </footer>
+</div>

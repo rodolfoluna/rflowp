@@ -131,7 +131,8 @@ consecuencia del diseño y no un problema de sincronización.
 | `src/guard/` | Guardas del portapapeles y bitácora de edición |
 | `src/teacher/` | Detección de copias y panel de revisión de lote |
 | `src/file/` | Formato `.algx`, almacenes, biblioteca y transferencia |
-| `src/ui/` | Ejemplos, menú y piezas de interfaz |
+| `src/ui/` | Ejemplos, menú, tema y piezas de interfaz |
+| `docs/` | Instructivos de una página para alumnos y profesor |
 | `tests/` | Ciclo de ida y vuelta, intérprete, layout, mutaciones, documento, comentarios |
 
 Decisiones que conviene no deshacer sin pensarlo:
@@ -348,9 +349,14 @@ Estos pasos no los sustituye ninguna prueba automática:
    ninguna entrega de ese curso se vuelve a abrir.
 3. **Repartir la llave pública el primer día**, antes de que nadie trabaje. Un
    algoritmo guardado antes de importarla solo lo abre su autor.
+   Reparte también [`docs/instructivo-alumnos.html`](docs/instructivo-alumnos.html);
+   está pensado para imprimirse en una hoja.
 4. **Decir en clase que no hay recuperación por la vía del alumno**: si pierde
    el teléfono, el profesor es quien puede devolverle su trabajo.
 5. Sustituir los iconos PNG de relleno de `public/`.
+
+Las dos hojas de [`docs/`](docs/) están hechas para imprimirse: la del alumno en
+verde y la del profesor en violeta, para que no se repartan cambiadas.
 
 ## Pendiente antes de liberar
 

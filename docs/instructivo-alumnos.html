@@ -1,0 +1,450 @@
+<title>RFlowP para alumnos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;600&family=Public+Sans:wght@400;600;700&display=swap">
+
+<style>
+   :root {
+      /* Tinta y papel: neutros con un punto de verde, para que no lean a gris de sistema. */
+      --papel: #ffffff;
+      --papel-hueco: #f4f6f5;
+      --tinta: #141a17;
+      --tinta-suave: #55605a;
+      --tinta-tenue: #7d8a84;
+      --regla: #d7dedb;
+
+      /* Verde del acento de la app, oscurecido para que contraste sobre papel. */
+      --acento: #00714c;
+      --acento-hueco: #e4f4ed;
+      --alerta: #a8261f;
+      --alerta-hueco: #fbeceb;
+      --aviso: #7a5300;
+      --aviso-hueco: #fdf3dd;
+
+      --display: 'Bricolage Grotesque', 'Trebuchet MS', sans-serif;
+      --texto: 'Public Sans', -apple-system, 'Segoe UI', sans-serif;
+      --mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace;
+   }
+
+   @media (prefers-color-scheme: dark) {
+      :root:not([data-theme='light']) {
+         --papel: #121614;
+         --papel-hueco: #1b211e;
+         --tinta: #e8eeeb;
+         --tinta-suave: #a3aea9;
+         --tinta-tenue: #75817b;
+         --regla: #2b3430;
+         --acento: #35d69b;
+         --acento-hueco: #13291f;
+         --alerta: #ff8479;
+         --alerta-hueco: #2c1614;
+         --aviso: #f0c96a;
+         --aviso-hueco: #2b2209;
+      }
+   }
+
+   :root[data-theme='dark'] {
+      --papel: #121614;
+      --papel-hueco: #1b211e;
+      --tinta: #e8eeeb;
+      --tinta-suave: #a3aea9;
+      --tinta-tenue: #75817b;
+      --regla: #2b3430;
+      --acento: #35d69b;
+      --acento-hueco: #13291f;
+      --alerta: #ff8479;
+      --alerta-hueco: #2c1614;
+      --aviso: #f0c96a;
+      --aviso-hueco: #2b2209;
+   }
+
+   * { box-sizing: border-box; }
+
+   body {
+      margin: 0;
+      background: var(--papel);
+      color: var(--tinta);
+      font-family: var(--texto);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+   }
+
+   .hoja {
+      max-width: 940px;
+      margin: 0 auto;
+      padding: 32px 28px 44px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+   }
+
+   /* ---- Cabecera ---- */
+   header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+      border-bottom: 3px solid var(--acento);
+      padding-bottom: 12px;
+   }
+
+   h1 {
+      font-family: var(--display);
+      font-weight: 800;
+      font-size: clamp(28px, 5vw, 40px);
+      line-height: 1.02;
+      letter-spacing: -0.025em;
+      margin: 0;
+      text-wrap: balance;
+   }
+   h1 em {
+      font-style: normal;
+      color: var(--acento);
+   }
+
+   .marca {
+      text-align: right;
+      font-size: 11px;
+      color: var(--tinta-tenue);
+      line-height: 1.45;
+   }
+   .marca strong {
+      display: block;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--tinta-suave);
+      letter-spacing: 0.02em;
+   }
+
+   .entrada {
+      margin: 0;
+      font-size: 15px;
+      color: var(--tinta-suave);
+      max-width: 62ch;
+   }
+
+   /* ---- Pasos: la numeración es real, son una secuencia ---- */
+   ol.pasos {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+      gap: 18px 26px;
+      counter-reset: paso;
+   }
+
+   ol.pasos > li {
+      counter-increment: paso;
+      display: grid;
+      grid-template-columns: 30px 1fr;
+      gap: 4px 11px;
+      align-content: start;
+   }
+
+   ol.pasos > li::before {
+      content: counter(paso);
+      grid-row: 1 / span 2;
+      font-family: var(--display);
+      font-weight: 800;
+      font-size: 21px;
+      line-height: 1;
+      color: var(--acento);
+      border-top: 2px solid var(--acento);
+      padding-top: 5px;
+      font-variant-numeric: tabular-nums;
+   }
+
+   ol.pasos h2 {
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 16px;
+      letter-spacing: -0.01em;
+      margin: 0;
+      padding-top: 3px;
+      text-wrap: balance;
+   }
+
+   ol.pasos .cuerpo {
+      grid-column: 2;
+      font-size: 13.5px;
+      color: var(--tinta-suave);
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+   }
+   ol.pasos p { margin: 0; }
+
+   /* Plataformas de instalación: tres filas etiquetadas, no tres tarjetas. */
+   dl.plataformas {
+      margin: 2px 0 0;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 4px 10px;
+      font-size: 12.5px;
+   }
+   dl.plataformas dt {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--tinta-tenue);
+      padding-top: 2px;
+      white-space: nowrap;
+   }
+   dl.plataformas dd { margin: 0; }
+
+   kbd {
+      font-family: var(--mono);
+      font-size: 11.5px;
+      font-weight: 600;
+      background: var(--papel-hueco);
+      border: 1px solid var(--regla);
+      border-radius: 4px;
+      padding: 1px 5px;
+      color: var(--tinta);
+      white-space: nowrap;
+   }
+
+   code {
+      font-family: var(--mono);
+      font-size: 12.5px;
+      color: var(--acento);
+      font-weight: 600;
+   }
+
+   /* ---- Avisos: se gastan solo donde hay algo irreversible ---- */
+   .avisos {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 14px;
+   }
+
+   .aviso {
+      border-left: 3px solid var(--aviso);
+      background: var(--aviso-hueco);
+      padding: 11px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+   }
+   .aviso.grave {
+      border-left-color: var(--alerta);
+      background: var(--alerta-hueco);
+   }
+
+   .aviso h3 {
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 14px;
+      margin: 0;
+      color: var(--aviso);
+   }
+   .aviso.grave h3 { color: var(--alerta); }
+
+   .aviso p {
+      margin: 0;
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: var(--tinta-suave);
+   }
+
+   /* ---- Pie ---- */
+   footer {
+      border-top: 1px solid var(--regla);
+      padding-top: 12px;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 11.5px;
+      color: var(--tinta-tenue);
+   }
+   .firma {
+      display: flex;
+      gap: 6px;
+      align-items: baseline;
+   }
+   .firma span {
+      border-bottom: 1px solid var(--regla);
+      min-width: 190px;
+      display: inline-block;
+   }
+
+   /* ---- Impresión: una hoja, tinta oscura sobre papel ---- */
+   @page { margin: 12mm; }
+
+   @media print {
+      :root {
+         --papel: #ffffff;
+         --papel-hueco: #f2f4f3;
+         --tinta: #000000;
+         --tinta-suave: #2f3733;
+         --tinta-tenue: #5c6661;
+         --regla: #c8d0cc;
+         --acento: #00583c;
+         --alerta: #8f1f19;
+         --aviso: #6b4800;
+         --aviso-hueco: #ffffff;
+         --alerta-hueco: #ffffff;
+         --acento-hueco: #ffffff;
+      }
+      body { font-size: 10.4pt; line-height: 1.38; }
+      .hoja { padding: 0; gap: 13px; max-width: none; }
+      h1 { font-size: 26pt; }
+      .entrada { font-size: 10.8pt; }
+      ol.pasos { gap: 12px 22px; }
+      ol.pasos h2 { font-size: 11.6pt; }
+      ol.pasos .cuerpo { font-size: 9.8pt; }
+      .aviso { border-left-width: 2.5px; padding: 8px 11px; break-inside: avoid; }
+      .aviso p { font-size: 9.4pt; }
+      ol.pasos > li { break-inside: avoid; }
+   }
+</style>
+
+<div class="hoja">
+   <header>
+      <h1>RFlowP<br><em>para alumnos</em></h1>
+      <p class="marca">
+         <strong>Diseño de algoritmos</strong>
+         Pseudocódigo y diagrama de flujo<br>
+         Guarda esta hoja
+      </p>
+   </header>
+
+   <p class="entrada">
+      Con esta app diseñas algoritmos escribiendo pseudocódigo o armando el diagrama de
+      flujo: haces uno y el otro aparece solo. Funciona sin internet y todo se guarda en
+      tu propio aparato.
+   </p>
+
+   <ol class="pasos">
+      <li>
+         <h2>Instala la app</h2>
+         <div class="cuerpo">
+            <p>Abre la dirección que te dio tu profesor y luego:</p>
+            <dl class="plataformas">
+               <dt>Android</dt>
+               <dd>Menú <kbd>⋮</kbd> → <em>Instalar aplicación</em></dd>
+               <dt>iPhone</dt>
+               <dd>
+                  Solo desde <strong>Safari</strong>. Botón <em>Compartir</em> (el cuadrito con
+                  la flecha hacia arriba) → <em>Agregar a inicio</em>
+               </dd>
+               <dt>PC</dt>
+               <dd>
+                  Chrome o Edge: icono de instalar, al final de la barra de direcciones
+               </dd>
+            </dl>
+         </div>
+      </li>
+
+      <li>
+         <h2>Escribe tu nombre y número de control</h2>
+         <div class="cuerpo">
+            <p>
+               La app te los pide una sola vez. <strong>Revísalos bien antes de continuar:</strong>
+               aparecerán en todo lo que entregues y no se pueden cambiar después.
+            </p>
+            <p>No hay contraseña ni cuenta. Nada sale de tu aparato.</p>
+         </div>
+      </li>
+
+      <li>
+         <h2>Importa la llave del curso</h2>
+         <div class="cuerpo">
+            <p>
+               Menú <kbd>⋮</kbd> → <em>Llave del curso</em> → <em>Importar llave</em>, y elige el
+               archivo que te dio tu profesor.
+            </p>
+            <p>
+               <strong>Hazlo antes de empezar a trabajar.</strong> Lo que guardes sin la llave
+               puesta, tu profesor no lo podrá abrir para calificarlo.
+            </p>
+         </div>
+      </li>
+
+      <li>
+         <h2>Diseña tu algoritmo</h2>
+         <div class="cuerpo">
+            <p>
+               Cambia entre <em>Código</em> y <em>Diagrama</em> con las pestañas de arriba. En el
+               diagrama, toca un <strong>+</strong> para agregar un bloque y toca cualquier
+               símbolo para editarlo o borrarlo.
+            </p>
+            <p><kbd>▶ Ejecutar</kbd> corre tu algoritmo y te pide los datos que necesite.</p>
+         </div>
+      </li>
+
+      <li>
+         <h2>Guarda mientras trabajas</h2>
+         <div class="cuerpo">
+            <p>
+               Menú <kbd>⋮</kbd> → <em>Guardar</em>. Puedes volver a abrirlo desde
+               <em>Mis algoritmos</em>.
+            </p>
+            <p>
+               Si cierras la app sin guardar, al volver recupera lo último que estabas
+               escribiendo, aunque estuviera a medias.
+            </p>
+         </div>
+      </li>
+
+      <li>
+         <h2>Entrega tu trabajo</h2>
+         <div class="cuerpo">
+            <p>
+               Menú <kbd>⋮</kbd> → <em>Exportar .algx</em>. Se descarga un archivo con tu número
+               de control en el nombre, por ejemplo <code>20161234-Tarea_3.algx</code>.
+            </p>
+            <p>Ese es el archivo que entregas, por donde te indique tu profesor.</p>
+         </div>
+      </li>
+   </ol>
+
+   <div class="avisos">
+      <div class="aviso grave">
+         <h3>No borres tus datos</h3>
+         <p>
+            La opción <em>Borrar mis datos</em> destruye la llave con la que se cifran tus
+            algoritmos. Después de usarla, <strong>tus archivos ya no se abren nunca más</strong>,
+            aunque vuelvas a escribir el mismo nombre y número de control. Solo tu profesor
+            podrá recuperarlos.
+         </p>
+      </div>
+
+      <div class="aviso">
+         <h3>No se puede copiar ni pegar</h3>
+         <p>
+            Es a propósito: el objetivo es que escribas tú. Cada intento de pegar queda
+            anotado dentro del archivo que entregas.
+         </p>
+      </div>
+
+      <div class="aviso">
+         <h3>Pasarle tu archivo a un compañero no le sirve</h3>
+         <p>
+            Solo tú y tu profesor pueden abrirlo. Y si aparece en la entrega de otra persona,
+            el archivo indica de qué aparato salió.
+         </p>
+      </div>
+
+      <div class="aviso">
+         <h3>Si cambias o pierdes tu teléfono</h3>
+         <p>
+            Avisa a tu profesor: él es el único que puede abrir tus entregas y devolvértelas.
+            No hay otra forma de recuperarlas.
+         </p>
+      </div>
+   </div>
+
+   <footer>
+      <div class="firma">Profesor: <span></span></div>
+      <div class="firma">Materia y grupo: <span></span></div>
+      <div class="firma">Entregas en: <span></span></div>
+   </footer>
+</div>
