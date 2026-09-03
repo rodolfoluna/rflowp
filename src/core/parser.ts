@@ -15,6 +15,7 @@
  */
 
 import {
+   childBlocks,
    nextId,
    type AssignStatement,
    type DataType,
@@ -57,11 +58,38 @@ const BLOCK_ENDERS: ReadonlySet<TokenType> = new Set<TokenType>([
    'HastaQue', 'DeOtroModo', 'FinArchivo',
 ]);
 
+/**
+ * Cómo nombrar un token en un mensaje de error.
+ *
+ * Sin esto los mensajes dicen cosas como «no se esperaba "FinArchivo"», que es
+ * el nombre interno del token y no significa nada para quien está aprendiendo.
+ */
+function describirToken(token: Token): string {
+   if (token.value) return `"${token.value}"`;
+
+   switch (token.type) {
+      case 'FinArchivo':
+         return 'el final del algoritmo';
+      case 'FinLinea':
+         return 'el final de la línea';
+      default:
+         return 'eso';
+   }
+}
+
 class Parser {
    private tokens: Token[];
    private pos = 0;
    readonly errors: ParseError[] = [];
    readonly comments = new Map<number, string>();
+
+   /**
+    * Línea en la que termina cada bloque, indexada por el propio array de
+    * sentencias. Se registra al parsear porque es el único momento en que se
+    * sabe: al ver el `FinSi` / `FinMientras` / `FinSegun` que lo cierra.
+    * Después sirve para saber a qué bloque pertenece cada comentario suelto.
+    */
+   private readonly blockEnds = new WeakMap<Statement[], number>();
 
    constructor(source: string) {
       const all = tokenize(source);
@@ -160,6 +188,92 @@ class Parser {
       return { line: start.line, col: start.col, endLine };
    }
 
+   // -- Comentarios ---------------------------------------------------------
+
+   /**
+    * Reparte los comentarios recolectados entre los nodos del árbol.
+    *
+    * Se hace en una pasada posterior y no durante el parseo porque para decidir
+    * dónde va un comentario suelto hace falta saber dónde termina su bloque, y
+    * eso solo se sabe cuando el bloque ya se cerró.
+    *
+    * Cada comentario acaba en uno de tres lugares:
+    *   - `leadingComments`  en línea propia, antes de una sentencia;
+    *   - `trailingComment`  al final de la línea de una sentencia;
+    *   - `afterComments`    al final de un bloque, colgando de su última
+    *                        sentencia, que es donde caen los que preceden a un
+    *                        `FinSi` o un `FinMientras`.
+    */
+   attachComments(program: Program): void {
+      if (this.comments.size === 0) return;
+
+      const pendientes = [...this.comments.keys()].sort((a, b) => a - b);
+      let cursor = 0;
+
+      /** Consume y devuelve los comentarios en líneas anteriores a `line`. */
+      const tomarAntesDe = (line: number): string[] => {
+         const out: string[] = [];
+         while (cursor < pendientes.length && pendientes[cursor] < line) {
+            out.push(this.comments.get(pendientes[cursor])!);
+            cursor += 1;
+         }
+         return out;
+      };
+
+      /** Consume el comentario que esté exactamente en `line`, si lo hay. */
+      const tomarEn = (line: number): string | undefined => {
+         if (cursor < pendientes.length && pendientes[cursor] === line) {
+            const texto = this.comments.get(pendientes[cursor])!;
+            cursor += 1;
+            return texto;
+         }
+         return undefined;
+      };
+
+      const procesarBloque = (block: Statement[]): void => {
+         for (const stmt of block) {
+            const line = stmt.loc?.line ?? 0;
+
+            const leading = tomarAntesDe(line);
+            if (leading.length > 0) stmt.leadingComments = leading;
+
+            // Para una sentencia compuesta, `loc.line` es la línea del
+            // encabezado (`Si …  Entonces`), que es donde el alumno escribiría
+            // el comentario de la misma línea.
+            const trailing = tomarEn(line);
+            if (trailing !== undefined) stmt.trailingComment = trailing;
+
+            for (const { block: hijo } of childBlocks(stmt)) {
+               procesarBloque(hijo);
+            }
+         }
+
+         // Lo que quede antes del cierre del bloque cuelga de la última
+         // sentencia. Si el bloque está vacío no se consume nada: el comentario
+         // sube solo al bloque de afuera en la siguiente llamada.
+         const fin = this.blockEnds.get(block);
+         const ultima = block[block.length - 1];
+         if (fin !== undefined && ultima) {
+            const resto = tomarAntesDe(fin);
+            if (resto.length > 0) ultima.afterComments = resto;
+         }
+      };
+
+      procesarBloque(program.body);
+
+      // Cualquier comentario posterior a la última sentencia queda al final del
+      // programa, antes de `FinProceso`.
+      const sobrantes = pendientes.slice(cursor).map((l) => this.comments.get(l)!);
+      if (sobrantes.length > 0) {
+         const ultima = program.body[program.body.length - 1];
+         if (ultima) {
+            ultima.afterComments = [...(ultima.afterComments ?? []), ...sobrantes];
+         } else {
+            program.afterComments = sobrantes;
+         }
+      }
+   }
+
    // -- Programa ------------------------------------------------------------
 
    parseProgram(): Program {
@@ -209,6 +323,7 @@ class Parser {
          this.skipNewlines();
       }
 
+      this.blockEnds.set(statements, this.current.line);
       return statements;
    }
 
@@ -230,7 +345,7 @@ class Parser {
             // `y <- 3`: una variable llamada como un operador lógico abre una
             // asignación igual que cualquier otro nombre.
             if (this.isIdentifierLike()) return this.parseAssign();
-            this.error(`No se esperaba "${token.value || token.type}" aquí.`);
+            this.error(`No se esperaba ${describirToken(token)} aquí.`);
             this.recover();
             return null;
       }
@@ -562,6 +677,7 @@ class Parser {
          this.skipNewlines();
       }
 
+      this.blockEnds.set(statements, this.current.line);
       return statements;
    }
 
@@ -592,6 +708,11 @@ class Parser {
 
    parseExpression(): Expression {
       return this.parseOr();
+   }
+
+   /** ¿Se consumieron ya todos los tokens? Lo usa `parseExpresion`. */
+   enElFinal(): boolean {
+      return this.check('FinArchivo') || this.check('FinLinea');
    }
 
    private parseBinaryLevel(
@@ -769,7 +890,7 @@ class Parser {
 
       // Nada encaja. Se emite un nodo de relleno para que el árbol siga siendo
       // válido y el resto del algoritmo se pueda seguir dibujando.
-      this.error(`Se esperaba un valor o una expresión, no "${token.value || token.type}".`);
+      this.error(`Falta un valor o una expresión antes de ${describirToken(token)}.`);
       if (!this.check('FinLinea') && !this.check('FinArchivo') && !BLOCK_ENDERS.has(token.type)) {
          this.advance();
       }
@@ -777,9 +898,46 @@ class Parser {
    }
 }
 
+/**
+ * Analiza una expresión suelta, sin programa alrededor.
+ *
+ * Lo usa el editor de expresiones del diagrama para validar lo que el alumno
+ * arma con el teclado de fichas antes de aceptarlo, reutilizando exactamente la
+ * misma gramática que el editor de texto. Sin esto habría dos nociones de
+ * "expresión válida" y acabarían divergiendo.
+ */
+export function parseExpresion(source: string): {
+   expresion: Expression | null;
+   errores: ParseError[];
+} {
+   const texto = source.trim();
+   if (texto === '') {
+      return { expresion: null, errores: [{ message: 'Falta la expresión.', line: 1, col: 1 }] };
+   }
+
+   const parser = new Parser(texto);
+   const expresion = parser.parseExpression();
+
+   // Si sobran tokens, la expresión estaba mal formada aunque el prefijo
+   // se haya podido leer: `2 +` o `a b` no deben pasar por válidos.
+   if (!parser.enElFinal()) {
+      parser.errors.push({
+         message: 'Sobra texto al final de la expresión.',
+         line: 1,
+         col: 1,
+      });
+   }
+
+   return {
+      expresion: parser.errors.length === 0 ? expresion : null,
+      errores: parser.errors,
+   };
+}
+
 /** Analiza el pseudocódigo y devuelve el AST junto con los errores hallados. */
 export function parse(source: string): ParseResult {
    const parser = new Parser(source);
    const program = parser.parseProgram();
+   parser.attachComments(program);
    return { program, errors: parser.errors, comments: parser.comments };
 }

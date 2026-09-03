@@ -40,6 +40,23 @@ export function resetIds(): void {
 interface Base {
    id: NodeId;
    loc?: Loc;
+
+   /**
+    * Comentarios en líneas propias, justo antes de la sentencia.
+    *
+    * Los comentarios viven en el AST y no en el texto porque la edición
+    * gráfica reimprime el pseudocódigo completo en cada cambio: si no
+    * estuvieran aquí, el primer clic en el diagrama borraría lo que el alumno
+    * escribió para explicarse.
+    */
+   leadingComments?: string[];
+   /** Comentario al final de la misma línea de la sentencia. */
+   trailingComment?: string;
+   /**
+    * Comentarios sueltos al final de un bloque, después de esta sentencia.
+    * Es donde caen los que van justo antes de un `FinSi`, `FinMientras`, etc.
+    */
+   afterComments?: string[];
 }
 
 // ---------------------------------------------------------------------------

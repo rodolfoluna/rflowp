@@ -7,7 +7,7 @@
     * el hit-testing lo hace el navegador, el zoom no pixela y un lector de
     * pantalla puede recorrerlo.
     */
-   import type { Diagram, Shape, Connector } from './layout';
+   import type { Diagram, Shape, Connector, InsertPoint } from './layout';
 
    interface Props {
       diagram: Diagram;
@@ -16,9 +16,23 @@
       /** Nodo seleccionado por el usuario. */
       selectedNodeId?: string;
       onSelect?: (nodeId: string) => void;
+      /**
+       * Muestra los puntos `+` para insertar. Se apaga durante la ejecución:
+       * editar el árbol a media corrida dejaría el resaltado apuntando a nodos
+       * que ya no existen.
+       */
+      editable?: boolean;
+      onInsertar?: (punto: InsertPoint) => void;
    }
 
-   let { diagram, activeNodeId, selectedNodeId, onSelect }: Props = $props();
+   let {
+      diagram,
+      activeNodeId,
+      selectedNodeId,
+      onSelect,
+      editable = false,
+      onInsertar,
+   }: Props = $props();
 
    // -- Pan y zoom ---------------------------------------------------------
 
@@ -32,13 +46,27 @@
    let pinchStart = 0;
    let scaleStart = 1;
 
+   /**
+    * Cuánto se movió el puntero desde que se apoyó. Sirve para no disparar un
+    * `+` cuando lo que el usuario hizo fue arrastrar el lienzo y soltar encima.
+    */
+   let arrastre = 0;
+
    function onPointerDown(e: PointerEvent) {
       (e.target as Element).setPointerCapture?.(e.pointerId);
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      arrastre = 0;
       if (pointers.size === 2) {
          pinchStart = pinchDistance();
          scaleStart = scale;
       }
+   }
+
+   /** Un desplazamiento menor a esto se considera un toque, no un arrastre. */
+   const TOLERANCIA_TOQUE = 6;
+
+   function esToque(): boolean {
+      return arrastre < TOLERANCIA_TOQUE;
    }
 
    function onPointerMove(e: PointerEvent) {
@@ -48,8 +76,11 @@
       pointers.set(e.pointerId, next);
 
       if (pointers.size === 1) {
-         panX += next.x - prev.x;
-         panY += next.y - prev.y;
+         const dx = next.x - prev.x;
+         const dy = next.y - prev.y;
+         arrastre += Math.abs(dx) + Math.abs(dy);
+         panX += dx;
+         panY += dy;
       } else if (pointers.size === 2 && pinchStart > 0) {
          const factor = pinchDistance() / pinchStart;
          scale = clampScale(scaleStart * factor);
@@ -67,7 +98,7 @@
    }
 
    function clampScale(v: number): number {
-      return Math.min(3, Math.max(0.15, v));
+      return Math.min(3, Math.max(0.25, v));
    }
 
    function onWheel(e: WheelEvent) {
@@ -75,14 +106,23 @@
       scale = clampScale(scale * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
    }
 
-   /** Encaja el diagrama completo en el área visible. */
+   /**
+    * Encaja el diagrama **al ancho**, no a la ventana completa.
+    *
+    * Encajar también el alto dejaría un algoritmo de veinte pasos en un tamaño
+    * ilegible, con los botones `+` demasiado pequeños para acertarles con el
+    * dedo. Al ajustar solo el ancho, los símbolos conservan un tamaño usable y
+    * lo que sobra se recorre arrastrando, que es lo natural en un diagrama de
+    * flujo: se lee de arriba abajo.
+    */
    export function fit() {
       if (!svgEl) return;
       const box = svgEl.getBoundingClientRect();
       if (!box.width || !box.height) return;
-      scale = clampScale(
-         Math.min(box.width / diagram.width, box.height / diagram.height) * 0.92,
-      );
+
+      // Nunca se amplía por encima del 100%: un algoritmo corto se vería
+      // absurdamente grande.
+      scale = clampScale(Math.min((box.width / diagram.width) * 0.94, 1));
       panX = (box.width - diagram.width * scale) / 2;
       panY = 16;
    }
@@ -257,7 +297,7 @@
                class:clickable={s.nodeId !== undefined}
                role={s.nodeId ? 'button' : undefined}
                tabindex={s.nodeId ? 0 : undefined}
-               onclick={() => s.nodeId && onSelect?.(s.nodeId)}
+               onclick={() => s.nodeId && esToque() && onSelect?.(s.nodeId)}
                onkeydown={(e) => {
                   if (s.nodeId && (e.key === 'Enter' || e.key === ' ')) {
                      e.preventDefault();
@@ -290,6 +330,34 @@
                </text>
             </g>
          {/each}
+
+         {#if editable}
+            {#each diagram.insertPoints as punto, i (`${punto.ownerId}|${punto.blockKey}|${punto.index}|${i}`)}
+               <g
+                  class="insertar"
+                  role="button"
+                  tabindex="0"
+                  aria-label="Agregar un bloque aquí"
+                  onclick={() => esToque() && onInsertar?.(punto)}
+                  onkeydown={(e) => {
+                     if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onInsertar?.(punto);
+                     }
+                  }}
+               >
+                  <!-- Área de toque generosa e invisible: el círculo visible es
+                       pequeño para no tapar el diagrama, pero un objetivo de
+                       14 px sería imposible de acertar con el pulgar. -->
+                  <circle class="zona" cx={punto.x} cy={punto.y} r="26" />
+                  <circle class="disco" cx={punto.x} cy={punto.y} r="13" />
+                  <path
+                     class="cruz"
+                     d="M {punto.x - 6} {punto.y} H {punto.x + 6} M {punto.x} {punto.y - 6} V {punto.y + 6}"
+                  />
+               </g>
+            {/each}
+         {/if}
       </g>
    </svg>
 
@@ -389,6 +457,37 @@
       stroke: var(--activo);
       stroke-width: 4;
       filter: drop-shadow(0 0 8px var(--activo));
+   }
+
+   .insertar {
+      cursor: pointer;
+   }
+   .insertar .zona {
+      fill: transparent;
+   }
+   .insertar .disco {
+      fill: var(--lienzo);
+      stroke: var(--texto-debil);
+      stroke-width: 2;
+      stroke-dasharray: 3 3;
+      transition: fill 120ms ease, stroke 120ms ease;
+   }
+   .insertar .cruz {
+      stroke: var(--texto-debil);
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      pointer-events: none;
+      transition: stroke 120ms ease;
+   }
+   .insertar:hover .disco,
+   .insertar:focus-visible .disco {
+      fill: var(--acento);
+      stroke: var(--acento);
+      stroke-dasharray: none;
+   }
+   .insertar:hover .cruz,
+   .insertar:focus-visible .cruz {
+      stroke: #04140b;
    }
 
    .controles {

@@ -2,52 +2,79 @@
    /**
     * Shell de la aplicación.
     *
-    * Mantiene el AST como fuente de verdad y lo proyecta en las dos vistas.
-    * En PC se muestran lado a lado; en móvil se alternan con pestañas, porque
-    * partir una pantalla de 375 px en dos no sirve para ninguna de las dos.
+    * El AST es la fuente de verdad y se proyecta en las dos vistas. En PC se
+    * muestran lado a lado; en móvil se alternan con pestañas, porque partir una
+    * pantalla de 375 px en dos no sirve para ninguna de las dos.
     */
    import Diagram from './chart/Diagram.svelte';
-   import { parse, type ParseError } from './core/parser';
-   import { layout } from './chart/layout';
+   import Paleta from './edit/Paleta.svelte';
+   import EditorSentencia from './edit/EditorSentencia.svelte';
+   import { layout, type InsertPoint } from './chart/layout';
    import { run, type Effect, RuntimeError } from './core/interpreter';
+   import type { ParseError } from './core/parser';
+   import type { Program } from './core/ast';
+   import { Documento } from './edit/documento.svelte';
+   import { crearSentencia, insertar, type Posicion, type TipoSentencia } from './edit/mutaciones';
    import { EJEMPLO_INICIAL } from './ui/ejemplos';
 
    type Vista = 'codigo' | 'diagrama';
    type LineaSalida = { texto: string; tipo: 'salida' | 'error' | 'info' };
 
-   let fuente = $state(EJEMPLO_INICIAL);
-   let vista = $state<Vista>('codigo');
+   const doc = new Documento(EJEMPLO_INICIAL);
+
+   let vista = $state<Vista>('diagrama');
    let salida = $state<LineaSalida[]>([]);
    let ejecutando = $state(false);
    let nodoActivo = $state<string | undefined>(undefined);
    let nodoSeleccionado = $state<string | undefined>(undefined);
+
+   /** Posición pendiente mientras la paleta está abierta. */
+   let insercionPendiente = $state<Posicion | null>(null);
 
    /** Petición de dato pendiente mientras corre el algoritmo. */
    let pidiendo = $state<{ variable: string } | null>(null);
    let respuesta = $state('');
    let resolverEntrada: ((valor: string) => void) | null = null;
 
-   // -- Proyecciones del AST ------------------------------------------------
-
-   const analisis = $derived(parse(fuente));
+   const diagrama = $derived(layout(doc.programa));
+   const numerosDeLinea = $derived(doc.texto.split('\n').map((_, i) => i + 1));
 
    /**
-    * Último árbol que compiló sin errores.
-    *
-    * Es la pieza que hace usable la edición en vivo: mientras el alumno escribe
-    * a medias, el diagrama conserva el último estado válido en vez de vaciarse
-    * y volver a aparecer en cada tecla.
+    * Durante la ejecución no se edita, y con errores de sintaxis tampoco.
+    * Lo primero, porque mover el árbol dejaría el resaltado apuntando a nodos
+    * que ya no existen; lo segundo, porque reimprimir el árbol borraría lo que
+    * el alumno está escribiendo a medias.
     */
-   let ultimoValido = $state(parse(EJEMPLO_INICIAL).program);
-   $effect(() => {
-      if (analisis.errors.length === 0) {
-         ultimoValido = analisis.program;
-      }
-   });
+   const editable = $derived(!ejecutando && doc.errores.length === 0);
 
-   const diagrama = $derived(layout(ultimoValido));
-   const errores = $derived(analisis.errors);
-   const desactualizado = $derived(errores.length > 0);
+   // -- Edición gráfica -----------------------------------------------------
+
+   function aplicar(mutacion: (p: Program) => Program) {
+      doc.aplicar(mutacion);
+   }
+
+   function abrirPaleta(punto: InsertPoint) {
+      insercionPendiente = {
+         ownerId: punto.ownerId,
+         blockKey: punto.blockKey,
+         index: punto.index,
+      };
+   }
+
+   function elegirDeLaPaleta(tipo: TipoSentencia) {
+      const posicion = insercionPendiente;
+      insercionPendiente = null;
+      if (!posicion) return;
+
+      const sentencia = crearSentencia(tipo);
+      doc.aplicar((p) => insertar(p, posicion, sentencia));
+      // Seleccionar lo recién puesto: el alumno casi siempre quiere editarlo ya.
+      nodoSeleccionado = sentencia.id;
+   }
+
+   function alSeleccionar(id: string) {
+      nodoSeleccionado = nodoSeleccionado === id ? undefined : id;
+   }
 
    // -- Ejecución -----------------------------------------------------------
 
@@ -58,7 +85,7 @@
    async function ejecutar() {
       if (ejecutando) return;
 
-      if (errores.length > 0) {
+      if (doc.errores.length > 0) {
          escribir('Corrige los errores antes de ejecutar.', 'error');
          return;
       }
@@ -66,8 +93,9 @@
       salida = [];
       ejecutando = true;
       nodoActivo = undefined;
+      nodoSeleccionado = undefined;
 
-      const gen = run(analisis.program);
+      const gen = run(doc.programa);
       let pendiente: string | undefined;
       let linea = '';
 
@@ -148,7 +176,7 @@
       vista = 'codigo';
       const area = document.getElementById('editor') as HTMLTextAreaElement | null;
       if (!area) return;
-      const lineas = fuente.split('\n');
+      const lineas = doc.texto.split('\n');
       let offset = 0;
       for (let i = 0; i < err.line - 1 && i < lineas.length; i++) {
          offset += lineas[i].length + 1;
@@ -157,14 +185,50 @@
       area.setSelectionRange(offset + err.col - 1, offset + err.col - 1);
    }
 
-   const numerosDeLinea = $derived(fuente.split('\n').map((_, i) => i + 1));
+   function atajos(e: KeyboardEvent) {
+      const meta = e.ctrlKey || e.metaKey;
+      if (!meta) return;
+
+      // Dentro del editor de texto manda el deshacer nativo del textarea, que
+      // es el que el alumno espera mientras escribe.
+      if ((e.target as HTMLElement | null)?.id === 'editor') return;
+
+      if (e.key === 'z' && !e.shiftKey) {
+         e.preventDefault();
+         doc.deshacer();
+      } else if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
+         e.preventDefault();
+         doc.rehacer();
+      }
+   }
 </script>
+
+<svelte:window onkeydown={atajos} />
 
 <div class="app">
    <header>
       <div class="marca">
          <strong>RFlowP</strong>
          <span class="sub">Algoritmos</span>
+      </div>
+
+      <div class="historial">
+         <button
+            onclick={() => doc.deshacer()}
+            disabled={!doc.puedeDeshacer}
+            title="Deshacer"
+            aria-label="Deshacer"
+         >
+            ↶
+         </button>
+         <button
+            onclick={() => doc.rehacer()}
+            disabled={!doc.puedeRehacer}
+            title="Rehacer"
+            aria-label="Rehacer"
+         >
+            ↷
+         </button>
       </div>
 
       <div class="pestanas" role="tablist">
@@ -174,7 +238,7 @@
             class:activa={vista === 'codigo'}
             onclick={() => (vista = 'codigo')}
          >
-            Pseudocódigo
+            <span class="largo">Pseudocódigo</span><span class="corto">Código</span>
          </button>
          <button
             role="tab"
@@ -186,8 +250,14 @@
          </button>
       </div>
 
-      <button class="ejecutar" onclick={ejecutar} disabled={ejecutando}>
-         {ejecutando ? 'Ejecutando…' : '▶ Ejecutar'}
+      <button
+         class="ejecutar"
+         onclick={ejecutar}
+         disabled={ejecutando}
+         aria-label="Ejecutar el algoritmo"
+      >
+         <span class="largo">{ejecutando ? 'Ejecutando…' : '▶ Ejecutar'}</span>
+         <span class="corto">{ejecutando ? '…' : '▶'}</span>
       </button>
    </header>
 
@@ -196,25 +266,26 @@
          <div class="editor-caja">
             <div class="gutter" aria-hidden="true">
                {#each numerosDeLinea as n (n)}
-                  <span class:con-error={errores.some((e) => e.line === n)}>{n}</span>
+                  <span class:con-error={doc.errores.some((e) => e.line === n)}>{n}</span>
                {/each}
             </div>
             <textarea
                id="editor"
-               bind:value={fuente}
+               value={doc.texto}
+               oninput={(e) => doc.escribir(e.currentTarget.value)}
                spellcheck="false"
                autocapitalize="off"
                aria-label="Editor de pseudocódigo"
             ></textarea>
          </div>
 
-         {#if errores.length > 0}
+         {#if doc.errores.length > 0}
             <div class="errores" role="alert">
                <div class="errores-titulo">
-                  {errores.length === 1 ? '1 error' : `${errores.length} errores`}
+                  {doc.errores.length === 1 ? '1 error' : `${doc.errores.length} errores`}
                </div>
                <ul>
-                  {#each errores.slice(0, 6) as err, i (i)}
+                  {#each doc.errores.slice(0, 6) as err, i (i)}
                      <li>
                         <button onclick={() => irALinea(err)}>
                            <span class="linea">línea {err.line}</span>
@@ -228,17 +299,32 @@
       </section>
 
       <section class="panel diagrama" class:oculto-movil={vista !== 'diagrama'}>
-         {#if desactualizado}
+         {#if doc.desactualizado}
             <div class="aviso">
-               El diagrama muestra la última versión que sí compiló.
+               El diagrama muestra la última versión que sí compiló. No se puede editar
+               hasta corregir el pseudocódigo.
             </div>
          {/if}
+
          <Diagram
             diagram={diagrama}
             activeNodeId={nodoActivo}
             selectedNodeId={nodoSeleccionado}
-            onSelect={(id) => (nodoSeleccionado = id)}
+            onSelect={alSeleccionar}
+            {editable}
+            onInsertar={abrirPaleta}
          />
+
+         {#if nodoSeleccionado && editable}
+            <aside class="inspector">
+               <EditorSentencia
+                  programa={doc.programa}
+                  nodoId={nodoSeleccionado}
+                  onAplicar={aplicar}
+                  onCerrar={() => (nodoSeleccionado = undefined)}
+               />
+            </aside>
+         {/if}
       </section>
    </main>
 
@@ -249,13 +335,20 @@
       </div>
       <div class="consola-texto">
          {#if salida.length === 0}
-            <p class="vacio">Presiona «Ejecutar» para correr tu algoritmo.</p>
+            <p class="vacio">
+               Toca un <strong>+</strong> del diagrama para agregar un bloque, o presiona
+               «Ejecutar».
+            </p>
          {/if}
          {#each salida as l, i (i)}
             <div class={l.tipo}>{l.texto}</div>
          {/each}
       </div>
    </section>
+
+   {#if insercionPendiente}
+      <Paleta onElegir={elegirDeLaPaleta} onCerrar={() => (insercionPendiente = null)} />
+   {/if}
 
    {#if pidiendo}
       <div class="modal-fondo">
@@ -290,6 +383,11 @@
       flex-shrink: 0;
    }
 
+   /* Etiquetas alternativas: la larga en PC, la corta en móvil. */
+   .corto {
+      display: none;
+   }
+
    .marca {
       display: flex;
       align-items: baseline;
@@ -302,6 +400,25 @@
    .sub {
       color: var(--texto-tenue);
       font-size: 12px;
+   }
+
+   .historial {
+      display: flex;
+      gap: 4px;
+   }
+   .historial button {
+      border: 1px solid var(--borde);
+      background: transparent;
+      color: var(--texto);
+      border-radius: 8px;
+      width: 34px;
+      height: 34px;
+      font-size: 15px;
+      cursor: pointer;
+   }
+   .historial button:disabled {
+      opacity: 0.35;
+      cursor: default;
    }
 
    .pestanas {
@@ -448,13 +565,28 @@
       left: 50%;
       transform: translateX(-50%);
       z-index: 2;
+      max-width: min(92%, 420px);
       background: var(--aviso-fondo);
       color: var(--aviso-texto);
       border: 1px solid var(--aviso-borde);
-      padding: 6px 12px;
-      border-radius: 999px;
+      padding: 7px 14px;
+      border-radius: 12px;
       font-size: 12px;
+      line-height: 1.45;
+      text-align: center;
       pointer-events: none;
+   }
+
+   /* Inspector: panel lateral en PC, hoja inferior en móvil. */
+   .inspector {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 330px;
+      border-left: 1px solid var(--borde);
+      box-shadow: -8px 0 24px rgb(0 0 0 / 0.14);
+      z-index: 5;
    }
 
    .consola {
@@ -520,7 +652,7 @@
       display: grid;
       place-items: center;
       padding: 20px;
-      z-index: 10;
+      z-index: 30;
    }
    .modal {
       background: var(--superficie);
@@ -563,6 +695,37 @@
 
    /* --- Móvil: una vista a la vez ------------------------------------- */
    @media (max-width: 860px) {
+      /*
+       * A 375 px no caben la marca completa, el historial, las dos pestañas y
+       * un botón con texto. Se recorta lo prescindible en vez de dejar que el
+       * botón de ejecutar se salga de la pantalla.
+       */
+      header {
+         gap: 8px;
+         padding: 8px 10px;
+      }
+      .sub {
+         display: none;
+      }
+      .largo {
+         display: none;
+      }
+      .corto {
+         display: inline;
+      }
+      .pestanas button {
+         padding: 7px 10px;
+         font-size: 13px;
+      }
+      .ejecutar {
+         padding: 9px 13px;
+         font-size: 15px;
+      }
+      .historial button {
+         width: 32px;
+         height: 32px;
+      }
+
       main {
          grid-template-columns: 1fr;
       }
@@ -574,6 +737,19 @@
       }
       .consola {
          height: 26vh;
+      }
+
+      /* El inspector sube desde abajo, al alcance del pulgar. */
+      .inspector {
+         top: auto;
+         left: 0;
+         width: auto;
+         max-height: 68dvh;
+         border-left: 0;
+         border-top: 1px solid var(--borde);
+         border-radius: 16px 16px 0 0;
+         box-shadow: 0 -8px 24px rgb(0 0 0 / 0.2);
+         overflow: hidden;
       }
    }
 

@@ -17,11 +17,6 @@ export interface PrintOptions {
    indent?: number;
 }
 
-// PENDIENTE: reinsertar los comentarios. El parser ya los recolecta en
-// `ParseResult.comments`, pero el printer todavía no los emite, así que un
-// viaje por el diagrama los pierde. Hay que resolverlo antes de la fase 3,
-// cuando la edición gráfica empiece a reescribir el texto de verdad.
-
 const DEFAULT_INDENT = 3;
 
 /** Imprime un programa completo. */
@@ -31,6 +26,10 @@ export function print(program: Program, options: PrintOptions = {}): string {
 
    lines.push(`Proceso ${program.name || 'sin_nombre'}`);
    printBlock(program.body, 1, indentSize, lines);
+   // Solo aparecen cuando el programa no tiene ninguna sentencia donde colgarlos.
+   for (const c of program.afterComments ?? []) {
+      lines.push(`${' '.repeat(indentSize)}${c}`);
+   }
    lines.push('FinProceso');
 
    return lines.join('\n');
@@ -94,6 +93,16 @@ function printStatement(
 ): void {
    const pad = ' '.repeat(depth * indentSize);
    const inner = depth + 1;
+
+   // Los comentarios propios de la sentencia se emiten antes de su código.
+   for (const c of stmt.leadingComments ?? []) {
+      out.push(`${pad}${c}`);
+   }
+
+   // Se apunta dónde empieza el código para poder pegarle después el
+   // comentario de la misma línea: en una sentencia compuesta el `Si …` queda
+   // aquí y el `FinSi` mucho más abajo.
+   const primeraLinea = out.length;
 
    switch (stmt.kind) {
       case 'DefineStatement':
@@ -168,5 +177,13 @@ function printStatement(
          out.push(`${pad}FinSegun`);
          break;
       }
+   }
+
+   if (stmt.trailingComment && out.length > primeraLinea) {
+      out[primeraLinea] = `${out[primeraLinea]} ${stmt.trailingComment}`;
+   }
+
+   for (const c of stmt.afterComments ?? []) {
+      out.push(`${pad}${c}`);
    }
 }

@@ -37,14 +37,17 @@ Tauri, sin DevTools, es la forma barata de subir la barrera si hace falta.
 | 0 | Andamiaje, PWA instalable y offline, interfaz responsiva | **Hecho** |
 | 1 | AST, lexer/parser PSeInt, printer, intérprete paso a paso | **Hecho** |
 | 2 | Layout determinista y diagrama SVG con pan/zoom | **Hecho** |
-| 3 | Edición gráfica bidireccional (puntos `+`, paleta, editor de expresiones) | Pendiente |
+| 3 | Edición gráfica bidireccional (puntos `+`, paleta, editor de expresiones) | **Hecho** |
 | 4 | Identidad local, OPFS, guardar/cargar `.algx` | Pendiente |
 | 5 | Cifrado y modo profesor | Pendiente |
 | 6 | Anti-copia, bitácora, pulido | Pendiente |
 
-Ahora mismo la app **escribe pseudocódigo, dibuja el diagrama equivalente y
-ejecuta**. El diagrama todavía es de solo lectura: la edición gráfica es la
-fase 3.
+Ahora mismo la app **edita en las dos direcciones**: se escribe pseudocódigo y
+el diagrama se redibuja, o se arma el diagrama tocando símbolos y el
+pseudocódigo se regenera. Y ejecuta, con la entrada de datos por diálogo.
+
+Falta todo lo de guardar y entregar: identidad, archivos `.algx`, cifrado y
+modo profesor (fases 4 a 6).
 
 ---
 
@@ -96,8 +99,9 @@ consecuencia del diseño y no un problema de sincronización.
 |---|---|
 | `src/core/` | `ast.ts`, `lexer.ts`, `parser.ts`, `printer.ts`, `interpreter.ts` |
 | `src/chart/` | `layout.ts` (geometría determinista), `Diagram.svelte` (render SVG) |
+| `src/edit/` | `mutaciones.ts`, `documento.svelte.ts`, paleta e inspectores |
 | `src/ui/` | Ejemplos y piezas de interfaz |
-| `tests/` | Ciclo de ida y vuelta, intérprete, layout |
+| `tests/` | Ciclo de ida y vuelta, intérprete, layout, mutaciones, documento, comentarios |
 
 Decisiones que conviene no deshacer sin pensarlo:
 
@@ -111,6 +115,16 @@ Decisiones que conviene no deshacer sin pensarlo:
 - **El layout es determinista.** Como el AST es estructurado, la posición de
   cada símbolo se calcula recursivamente y por construcción no hay solapamientos.
   No hace falta arrastrar nodos ni un motor de grafos.
+- **Las mutaciones no mutan.** Cada operación devuelve un árbol nuevo con
+  `structuredClone`, conservando los `id`. De ahí sale deshacer/rehacer como una
+  simple lista de árboles, y el resaltado no salta al editar.
+- **El árbol vive en `$state.raw`, no en `$state`.** La reactividad profunda de
+  Svelte envuelve el objeto en un Proxy, y `structuredClone` no puede clonar un
+  Proxy: falla con `DataCloneError`. Como el árbol siempre se reemplaza entero,
+  la reactividad profunda además no aporta nada.
+- **Los comentarios viven en el AST**, no en el texto. La edición gráfica
+  reimprime el pseudocódigo completo en cada cambio; si no estuvieran en el
+  árbol, el primer clic en el diagrama borraría lo que el alumno escribió.
 
 ### El dialecto
 
@@ -136,9 +150,26 @@ hace lo que uno espera.
 
 ---
 
+## Edición gráfica
+
+- Entre cada par de símbolos hay un **`+`**. Al tocarlo se abre la paleta:
+  hoja inferior en móvil (al alcance del pulgar), recuadro centrado en PC.
+- Tocar un símbolo abre el **inspector** con los campos de esa sentencia, más
+  subir, bajar y eliminar.
+- Las expresiones se editan con un **teclado propio**: fichas con las variables
+  ya declaradas, operadores y funciones. Evita pelearse con el teclado del
+  sistema en móvil, reduce los errores de escritura de nombres, y de paso quita
+  la vía natural de pegar código de fuera.
+- Lo que se teclea se valida con `parseExpresion`, es decir con la **misma**
+  gramática del editor de texto. No hay dos nociones de expresión válida.
+- Los bloques nuevos nacen con valores que **nunca cuelgan el programa**: un
+  `Mientras` empieza con condición `Falso` y un `Repetir` con `Verdadero`.
+- No se puede editar gráficamente mientras el pseudocódigo tiene errores:
+  reimprimir el árbol borraría lo que se está escribiendo a medias.
+
 ## Pruebas
 
-152 pruebas, sin dependencias del navegador:
+211 pruebas, sin dependencias del navegador:
 
 - **Ida y vuelta**: sobre 16 algoritmos, `parse → print → parse` devuelve el
   mismo árbol, imprimir es idempotente y los ids no se repiten. Es la red de
@@ -149,6 +180,13 @@ hace lo que uno espera.
   (división entre cero, índice fuera de rango, ciclo infinito).
 - **Layout**: ningún símbolo se solapa con otro, todo cae dentro del lienzo, el
   resultado es determinista y cada sentencia tiene su símbolo.
+- **Mutaciones**: insertar en **cada** punto `+` de cuatro formas de programa
+  produce código que reparsea; borrar no se lleva los comentarios; los ciclos
+  nuevos no se cuelgan; los ids no se repiten.
+- **Documento**: el texto inválido conserva el último árbol bueno, la edición
+  gráfica reimprime, los ids sobreviven, y deshacer/rehacer encadena bien.
+- **Comentarios**: sobreviven al ciclo en línea propia, al final de la línea y
+  al final de un bloque, y el conteo se conserva.
 
 ---
 
@@ -158,4 +196,8 @@ hace lo que uno espera.
   inicio, en modo avión, y comprobando que los datos sobreviven varios días.
 - Sustituir los iconos PNG de relleno de `public/` por los definitivos.
 - Cambiar el `<textarea>` por CodeMirror 6, necesario para bloquear el
-  portapapeles dentro del editor (fase 6).
+  portapapeles dentro del editor (fase 6). Al hacerlo hay que comprobar que
+  escribir el texto desde el código **no** dispara su `oninput`: de eso depende
+  que las dos vías de edición no se muerdan la cola.
+- El inspector edita el primer valor de un `Escribir` con varias partes; el
+  resto se editan desde el pseudocódigo. Falta la edición de la lista completa.
