@@ -8,25 +8,39 @@ ver [`NOTICE.md`](NOTICE.md).
 
 ---
 
-## Advertencia sobre las medidas anti-copia
+## Qué protege esto de verdad, y qué no
 
-Este proyecto incluye, por diseño, cifrado de archivos y bloqueo de
-copiar/pegar. **Son medidas de disuasión, no de seguridad.** Conviene que tanto
-el profesor como los alumnos lo sepan:
+Conviene que el profesor lo entienda con precisión antes de apoyarse en ello.
 
-- Un alumno con conocimientos puede abrir las herramientas de desarrollo del
-  navegador y leer o alterar lo que quiera.
-- Nadie puede impedir que alguien fotografíe la pantalla y retranscriba a mano.
+**Lo que sí es sólido**, porque es criptografía estándar:
 
-Lo que sí es sólido es la **trazabilidad**: cada archivo va firmado con la
-identidad de su autor y con una bitácora de edición, de modo que un trabajo
-copiado delata a su autor original cuando el profesor lo abre. Si dos entregas
-comparten la misma llave de firma o el mismo identificador de instalación,
-salieron del mismo dispositivo, y el panel del profesor lo marca.
+- Un alumno **no puede abrir el archivo de otro**. Cada archivo se cifra con una
+  llave nueva, envuelta con la llave maestra del autor —que es *no exportable*:
+  ni desde las herramientas del navegador se puede copiar a otro dispositivo—.
+- El **profesor abre cualquier entrega** de su curso, con su llave privada.
+- **Borrar los datos deja los archivos ilegibles para el alumno**, y de forma
+  irreversible: volver a escribir el mismo nombre y número de control no
+  recupera nada, porque la llave se destruyó.
+- **Alterar un archivo se detecta**: tocar el texto cifrado impide abrirlo, y
+  tocar el encabezado (nombre, número de control, fechas) invalida la firma.
 
-El endurecimiento adicional (ofuscación, detección de DevTools) tiene
-rendimientos decrecientes y cuesta accesibilidad. La build de escritorio con
-Tauri, sin DevTools, es la forma barata de subir la barrera si hace falta.
+**Lo que NO protege**, y hay que decirlo:
+
+- Nadie puede impedir **fotografiar la pantalla y retranscribir a mano**.
+- La firma **no es una identidad verificada**: la llave pública viaja dentro del
+  propio archivo y no hay ninguna autoridad que ate un número de control a una
+  llave. Quien entienda el formato puede fabricar un archivo con el nombre que
+  quiera. Es tamper-evidence y trazabilidad, no autenticación.
+- El bloqueo de copiar/pegar (fase 6) es fricción, no una barrera.
+
+**Dónde está el valor real contra la copia:** en la *trazabilidad*. Cada archivo
+lleva la huella de la llave de firma de la instalación que lo creó. Dos entregas
+con la misma huella y distinto nombre salieron del mismo dispositivo. Eso es lo
+que delata una copia, y es difícil de esquivar sin entender el formato.
+
+**Si necesitas subir la barrera**, la build de escritorio con Tauri y las
+herramientas de desarrollo deshabilitadas es la opción barata. La ofuscación del
+bundle tiene rendimientos decrecientes y cuesta accesibilidad.
 
 ---
 
@@ -39,19 +53,16 @@ Tauri, sin DevTools, es la forma barata de subir la barrera si hace falta.
 | 2 | Layout determinista y diagrama SVG con pan/zoom | **Hecho** |
 | 3 | Edición gráfica bidireccional (puntos `+`, paleta, editor de expresiones) | **Hecho** |
 | 4 | Identidad local, OPFS, guardar/cargar `.algx` | **Hecho** |
-| 5 | Cifrado y modo profesor | Pendiente |
+| 5 | Cifrado y modo profesor | **Hecho** |
 | 6 | Anti-copia, bitácora, pulido | Pendiente |
 
 Ahora mismo la app **edita en las dos direcciones**: se escribe pseudocódigo y
 el diagrama se redibuja, o se arma el diagrama tocando símbolos y el
-pseudocódigo se regenera. Ejecuta, guarda en el dispositivo, exporta e importa
-`.algx`, y recuerda quién es el alumno.
+pseudocódigo se regenera. Ejecuta, guarda en el dispositivo, y **cifra** lo que
+exporta de modo que solo el alumno y su profesor puedan abrirlo.
 
-> **Todavía no se puede usar en un curso real.** Los archivos `.algx` de esta
-> versión **no están cifrados**: se abren con cualquier editor de texto y los
-> alumnos pueden intercambiárselos. La protección y el modo profesor son las
-> fases 5 y 6. La app y el diálogo de borrado lo dicen en pantalla; no cambies
-> esos textos hasta que el cifrado exista de verdad.
+Falta la fase 6: bloquear copiar/pegar, llenar la bitácora de edición y el
+panel de lote del profesor con detección automática de duplicados.
 
 ---
 
@@ -105,6 +116,7 @@ consecuencia del diseño y no un problema de sincronización.
 | `src/chart/` | `layout.ts` (geometría determinista), `Diagram.svelte` (render SVG) |
 | `src/edit/` | `mutaciones.ts`, `documento.svelte.ts`, paleta e inspectores |
 | `src/identity/` | Identidad del alumno, bienvenida y borrado de datos |
+| `src/crypto/` | Sobre cifrado, llaves y panel del profesor |
 | `src/file/` | Formato `.algx`, almacenes, biblioteca y transferencia |
 | `src/ui/` | Ejemplos, menú y piezas de interfaz |
 | `tests/` | Ciclo de ida y vuelta, intérprete, layout, mutaciones, documento, comentarios |
@@ -206,15 +218,55 @@ Contenedor JSON con dos partes:
 
 | Parte | Contenido | Por qué |
 |---|---|---|
-| `encabezado` | autor, `deviceId`, título, fechas, versión | Siempre en claro: el profesor ordena un lote y detecta duplicados sin descifrar nada |
-| `contenido` | el AST y la bitácora | Hoy en claro; en la fase 5 pasa a llevar el sobre cifrado **sin cambiar el contenedor** |
+| encabezado | autor, `deviceId`, título, fechas, versión | Siempre en claro: el profesor ordena un lote y detecta duplicados sin descifrar nada. Va **cubierto por la firma**, así que alterarlo se nota |
+| `sobre` | el AST y la bitácora, cifrados | Solo lo abren el autor y el profesor |
 
-El campo `alg` dice cómo está protegido. Hoy vale `"ninguno"`; un archivo con
-otro valor se rechaza con un mensaje claro en vez de fallar de forma rara.
+Se siguen leyendo los archivos `alg: "ninguno"` de versiones anteriores, para
+que nadie pierda a mitad de curso lo que ya tenía hecho.
+
+## Cifrado
+
+```
+        CEK aleatoria (AES-GCM 256, nueva en cada guardado)
+                 │
+      ┌──────────┴──────────┐
+      ▼                     ▼
+ cifra el AST      se envuelve DOS veces
+                     │              │
+        AES-KW(llave del alumno)   ECIES(pública del profesor)
+                     │              │
+              abre el autor    abre el profesor
+```
+
+Envolver la llave dos veces, en vez de cifrar el contenido dos veces, mantiene
+el archivo pequeño y haría trivial añadir más destinatarios (un segundo profesor,
+por ejemplo) sin tocar el formato.
+
+| Llave | Dónde vive | Exportable | Por qué |
+|---|---|---|---|
+| Maestra del alumno (AES-KW) | IndexedDB | **No** | Impide copiar la identidad a otro dispositivo o prestársela a un compañero |
+| Firma del alumno (ECDSA P-256) | IndexedDB | **No** | Su pública va en cada archivo y es la huella que enlaza entregas |
+| Del profesor (ECDH P-256) | Archivo + IndexedDB | **Sí** | Tiene que poder respaldarla; sin respaldo, perder el equipo es perder el curso |
+
+**No hay frase de respaldo para el alumno, a propósito**: una frase que se puede
+guardar es una frase que se puede prestar, y con ella se prestaría la identidad
+entera. La autoridad de recuperación es el profesor, que puede abrir cualquier
+entrega y devolvérsela al alumno.
+
+### Cómo se reparte la llave del curso
+
+1. El profesor entra en **Llave del curso → Generar el par**. Se descargan dos
+   archivos: la **pública**, que reparte, y la **privada**, que guarda él.
+2. Los alumnos importan la pública una vez, al principio del curso.
+3. Ambos ven la misma **huella** (`MMTJ-DKNN-SJCD`), fácil de dictar en voz alta
+   para confirmar que todos tienen la llave correcta.
+
+Si un alumno guarda **antes** de importar la llave, ese archivo solo lo podrá
+abrir él: el profesor no. La app lo avisa en el menú y al exportar.
 
 ## Pruebas
 
-248 pruebas, sin dependencias del navegador:
+272 pruebas, sin dependencias del navegador:
 
 - **Ida y vuelta**: sobre 16 algoritmos, `parse → print → parse` devuelve el
   mismo árbol, imprimir es idempotente y los ids no se repiten. Es la red de
@@ -237,6 +289,12 @@ otro valor se rechaza con un mensaje claro en vez de fallar de forma rara.
 - **Formato y biblioteca**: el ciclo guardar/leer conserva todo, sobrescribir no
   reinicia la fecha de creación, un archivo dañado no oculta a los demás, y el
   borrador conserva texto que no compila.
+- **Criptografía** (`tests/cripto.test.ts`), que es donde se sostiene la promesa
+  del proyecto: el alumno abre lo suyo; otro alumno **no** puede aunque tenga el
+  archivo; el profesor abre todo; la llave de otro profesor no sirve; borrar los
+  datos deja al alumno fuera y al profesor dentro; alterar el ciphertext impide
+  abrir y alterar el encabezado invalida la firma; dos entregas de la misma
+  instalación comparten huella; y el algoritmo no aparece en claro en el archivo.
 
 ---
 
@@ -254,3 +312,6 @@ otro valor se rechaza con un mensaje claro en vez de fallar de forma rara.
   que las dos vías de edición no se muerdan la cola.
 - El inspector edita el primer valor de un `Escribir` con varias partes; el
   resto se editan desde el pseudocódigo. Falta la edición de la lista completa.
+- El panel de lote del profesor todavía no marca los duplicados
+  automáticamente: la huella ya se calcula y se guarda, pero hay que compararla
+  a ojo. Es lo primero de la fase 6.

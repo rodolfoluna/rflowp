@@ -1,9 +1,13 @@
 /**
- * Identidad, formato `.algx` y biblioteca.
+ * Identidad, contenedor `.algx` y biblioteca.
  *
- * Toda la lógica se prueba contra los almacenes en memoria: sin esa separación
- * el guardado quedaría sin cobertura, y es justo donde un error le cuesta al
- * alumno el trabajo de una tarde.
+ * Lo específicamente criptográfico (quién abre qué, firmas, huellas) vive en
+ * `cripto.test.ts`. Aquí se prueba la mecánica: validación de datos, el
+ * contenedor, y el guardado/listado/borrado.
+ *
+ * Todo contra los almacenes en memoria: sin esa separación el guardado
+ * quedaría sin cobertura, y es justo donde un error le cuesta al alumno el
+ * trabajo de una tarde.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -17,18 +21,21 @@ import {
    type Identidad,
 } from '../src/identity/identidad';
 import {
-   crearArchivo,
+   crearEncabezado,
    deserializar,
    ErrorArchivo,
    nombreSugerido,
-   serializar,
+   serializarEnClaro,
    bitacoraNueva,
+   encabezadoCanonico,
+   type Contenido,
 } from '../src/file/algx';
 import {
    almacenArchivosEnMemoria,
    almacenIdentidadEnMemoria,
 } from '../src/file/almacenes';
-import { Biblioteca } from '../src/file/biblioteca.svelte';
+import { Biblioteca, type ContextoCripto } from '../src/file/biblioteca.svelte';
+import { generarLlavesAlumno, generarLlavesProfesor } from '../src/crypto/llaves';
 
 const FUENTE = `Proceso p
    Definir a Como Entero
@@ -124,32 +131,33 @@ describe('validación de identidad', () => {
 
 // ---------------------------------------------------------------------------
 
-describe('formato .algx', () => {
-   const archivo = () =>
-      crearArchivo({
-         programa: programa(),
+describe('contenedor .algx', () => {
+   const encabezado = () =>
+      crearEncabezado({
          titulo: 'Suma de dos números',
          autor: { numeroControl: '20161234', nombre: 'Ana López', grupo: '3A' },
          deviceId: 'dispositivo-1',
-         appVersion: '0.2.0',
+         appVersion: '0.5.0',
+         alg: 'ninguno',
          ahora: () => new Date('2026-03-01T12:00:00Z'),
       });
 
-   it('sobrevive al ciclo de guardar y leer', () => {
-      const original = archivo();
-      const vuelta = deserializar(serializar(original));
-
-      expect(vuelta.encabezado.autor).toEqual(original.encabezado.autor);
-      expect(vuelta.encabezado.titulo).toBe('Suma de dos números');
-      expect(vuelta.encabezado.deviceId).toBe('dispositivo-1');
-      expect(vuelta.contenido.programa).toEqual(original.contenido.programa);
+   const contenido = (): Contenido => ({
+      programa: programa(),
+      bitacora: bitacoraNueva(),
    });
 
-   it('el encabezado queda legible sin tocar el contenido', () => {
-      // El profesor necesita ordenar un lote sin abrir cada algoritmo.
-      const bruto = JSON.parse(serializar(archivo()));
-      expect(bruto.autor.numeroControl).toBe('20161234');
-      expect(bruto.titulo).toBe('Suma de dos números');
+   it('sobrevive al ciclo de escribir y leer', () => {
+      const e = encabezado();
+      const leido = deserializar(serializarEnClaro(e, contenido()));
+
+      expect(leido.encabezado.autor).toEqual(e.autor);
+      expect(leido.encabezado.titulo).toBe('Suma de dos números');
+      expect(leido.encabezado.deviceId).toBe('dispositivo-1');
+      expect(leido.carga.cifrado).toBe(false);
+      if (!leido.carga.cifrado) {
+         expect(print(leido.carga.contenido.programa)).toBe(FUENTE);
+      }
    });
 
    it('rechaza un archivo que no es de la app', () => {
@@ -158,56 +166,92 @@ describe('formato .algx', () => {
    });
 
    it('rechaza una versión de formato desconocida', () => {
-      const bruto = JSON.parse(serializar(archivo()));
+      const bruto = JSON.parse(serializarEnClaro(encabezado(), contenido()));
       bruto.fmt = 'algx/99';
       expect(() => deserializar(JSON.stringify(bruto))).toThrow(/otra versión/);
    });
 
-   it('avisa en vez de fallar raro ante un archivo protegido', () => {
-      // Pasará cuando exista la fase 5 y alguien abra un archivo cifrado con
-      // una build vieja.
-      const bruto = JSON.parse(serializar(archivo()));
-      bruto.alg = 'A256GCM+ECIES-P256';
-      expect(() => deserializar(JSON.stringify(bruto))).toThrow(/protegido/);
-   });
-
    it('rechaza un archivo sin programa', () => {
-      const bruto = JSON.parse(serializar(archivo()));
+      const bruto = JSON.parse(serializarEnClaro(encabezado(), contenido()));
       delete bruto.contenido.programa;
       expect(() => deserializar(JSON.stringify(bruto))).toThrow(/incompleto|dañado/);
    });
 
    it('rellena la bitácora si el archivo es viejo y no la trae', () => {
-      const bruto = JSON.parse(serializar(archivo()));
+      const bruto = JSON.parse(serializarEnClaro(encabezado(), contenido()));
       delete bruto.contenido.bitacora;
-      expect(deserializar(JSON.stringify(bruto)).contenido.bitacora).toEqual(bitacoraNueva());
+      const leido = deserializar(JSON.stringify(bruto));
+      expect(leido.carga.cifrado).toBe(false);
+      if (!leido.carga.cifrado) {
+         expect(leido.carga.contenido.bitacora).toEqual(bitacoraNueva());
+      }
    });
 
    it('el nombre sugerido identifica al autor y quita acentos', () => {
-      const nombre = nombreSugerido(archivo().encabezado);
-      expect(nombre).toBe('20161234-Suma_de_dos_numeros.algx');
+      expect(nombreSugerido(encabezado())).toBe('20161234-Suma_de_dos_numeros.algx');
+   });
+
+   it('el encabezado canónico no depende del orden de construcción', () => {
+      // De esto depende que firmar y verificar produzcan los mismos bytes.
+      const a = encabezado();
+      const b: typeof a = {
+         appVersion: a.appVersion,
+         modificado: a.modificado,
+         creado: a.creado,
+         titulo: a.titulo,
+         deviceId: a.deviceId,
+         autor: a.autor,
+         alg: a.alg,
+         fmt: a.fmt,
+         magic: a.magic,
+      };
+      expect(encabezadoCanonico(b)).toBe(encabezadoCanonico(a));
+   });
+
+   it('el encabezado canónico cambia si cambia cualquier campo', () => {
+      const a = encabezado();
+      const original = encabezadoCanonico(a);
+
+      expect(encabezadoCanonico({ ...a, titulo: 'Otro' })).not.toBe(original);
+      expect(
+         encabezadoCanonico({ ...a, autor: { ...a.autor, numeroControl: '999' } }),
+      ).not.toBe(original);
+      expect(encabezadoCanonico({ ...a, creado: '2020-01-01' })).not.toBe(original);
    });
 });
 
 // ---------------------------------------------------------------------------
 
 describe('biblioteca', () => {
-   function nueva() {
+   /** Instalación completa con llaves reales: `guardar` ya cifra. */
+   async function nueva() {
+      const alumno = await generarLlavesAlumno();
+      const profesor = await generarLlavesProfesor();
+      const contexto: ContextoCripto = {
+         alumno,
+         profesorPublica: profesor.publica,
+         profesorPrivada: null,
+      };
       let n = 0;
-      return new Biblioteca(almacenArchivosEnMemoria(), '0.2.0', () => `id${++n}`);
+      const almacen = almacenArchivosEnMemoria();
+      return {
+         almacen,
+         bib: new Biblioteca(almacen, '0.5.0', () => contexto, () => `id${++n}.algx`),
+      };
    }
 
    it('guarda y vuelve a listar', async () => {
-      const bib = nueva();
+      const { bib } = await nueva();
       await bib.guardar({ programa: programa(), titulo: 'Mi algoritmo', identidad: IDENTIDAD });
 
       expect(bib.archivos.length).toBe(1);
       expect(bib.archivos[0].titulo).toBe('Mi algoritmo');
       expect(bib.archivos[0].numeroControl).toBe('20161234');
+      expect(bib.archivos[0].cifrado).toBe(true);
    });
 
    it('abre lo que guardó, con el programa intacto', async () => {
-      const bib = nueva();
+      const { bib } = await nueva();
       const original = programa();
       const id = await bib.guardar({
          programa: original,
@@ -223,7 +267,7 @@ describe('biblioteca', () => {
    });
 
    it('sobrescribir conserva la fecha de creación original', async () => {
-      const bib = nueva();
+      const { bib } = await nueva();
       const id = await bib.guardar({
          programa: programa(),
          titulo: 'v1',
@@ -242,13 +286,13 @@ describe('biblioteca', () => {
    });
 
    it('un título vacío no deja el archivo sin nombre', async () => {
-      const bib = nueva();
+      const { bib } = await nueva();
       await bib.guardar({ programa: programa(), titulo: '   ', identidad: IDENTIDAD });
       expect(bib.archivos[0].titulo).toBe('Sin título');
    });
 
    it('borra un algoritmo', async () => {
-      const bib = nueva();
+      const { bib } = await nueva();
       const id = await bib.guardar({
          programa: programa(),
          titulo: 'Temporal',
@@ -261,7 +305,7 @@ describe('biblioteca', () => {
    });
 
    it('lista lo más reciente primero', async () => {
-      const bib = nueva();
+      const { bib } = await nueva();
       await bib.guardar({ programa: programa(), titulo: 'primero', identidad: IDENTIDAD });
       await new Promise((r) => setTimeout(r, 5));
       await bib.guardar({ programa: programa(), titulo: 'segundo', identidad: IDENTIDAD });
@@ -270,7 +314,7 @@ describe('biblioteca', () => {
    });
 
    it('marca como ajeno lo que vino de otra instalación', async () => {
-      const bib = nueva();
+      const { bib } = await nueva();
       const otro: Identidad = { ...IDENTIDAD, deviceId: 'otro-dispositivo', nombre: 'Luis Ruiz' };
       await bib.guardar({ programa: programa(), titulo: 'De Luis', identidad: otro });
 
@@ -280,29 +324,27 @@ describe('biblioteca', () => {
    });
 
    it('importa un .algx válido', async () => {
-      const origen = nueva();
-      const id = await origen.guardar({
+      const origen = await nueva();
+      const id = await origen.bib.guardar({
          programa: programa(),
          titulo: 'Compartido',
          identidad: IDENTIDAD,
       });
-      const { texto } = await origen.paraExportar(id);
+      const { texto } = await origen.bib.paraExportar(id);
 
-      const destino = nueva();
-      await destino.importar(texto);
-      expect(destino.archivos[0].titulo).toBe('Compartido');
+      const destino = await nueva();
+      await destino.bib.importar(texto);
+      expect(destino.bib.archivos[0].titulo).toBe('Compartido');
    });
 
    it('rechaza importar basura sin ensuciar el almacén', async () => {
-      const bib = nueva();
+      const { bib } = await nueva();
       await expect(bib.importar('no soy un algx')).rejects.toThrow(ErrorArchivo);
       expect(bib.archivos).toEqual([]);
    });
 
    it('un archivo dañado no oculta a los demás', async () => {
-      const almacen = almacenArchivosEnMemoria();
-      const bib = new Biblioteca(almacen, '0.2.0', () => 'id-fijo.algx');
-
+      const { bib, almacen } = await nueva();
       await bib.guardar({ programa: programa(), titulo: 'Bueno', identidad: IDENTIDAD });
       await almacen.guardar('roto.algx', '{{{ esto no es json');
 
@@ -311,7 +353,7 @@ describe('biblioteca', () => {
    });
 
    it('exportar propone un nombre con el número de control', async () => {
-      const bib = nueva();
+      const { bib } = await nueva();
       const id = await bib.guardar({
          programa: programa(),
          titulo: 'Tarea 3',
@@ -323,7 +365,7 @@ describe('biblioteca', () => {
    });
 
    it('el borrador guarda el texto tal cual, aunque no compile', async () => {
-      const bib = nueva();
+      const { bib } = await nueva();
       const aMedias = `Proceso p
    Si a > `;
 
@@ -336,13 +378,13 @@ describe('biblioteca', () => {
    });
 
    it('el borrador recuerda a qué archivo pertenecía', async () => {
-      const bib = nueva();
+      const { bib } = await nueva();
       await bib.guardarBorrador({ texto: FUENTE, titulo: 'Tarea', archivoId: 'abc.algx' });
       expect((await bib.leerBorrador())?.archivoId).toBe('abc.algx');
    });
 
    it('el borrador no aparece en la lista de algoritmos del alumno', async () => {
-      const bib = nueva();
+      const { bib } = await nueva();
       await bib.guardar({ programa: programa(), titulo: 'Real', identidad: IDENTIDAD });
       await bib.guardarBorrador({ texto: FUENTE, titulo: 'En curso' });
 
@@ -351,23 +393,35 @@ describe('biblioteca', () => {
    });
 
    it('sin borrador previo devuelve null en vez de fallar', async () => {
-      expect(await nueva().leerBorrador()).toBeNull();
+      const { bib } = await nueva();
+      expect(await bib.leerBorrador()).toBeNull();
    });
 
    it('un borrador corrupto no rompe el arranque', async () => {
-      const almacen = almacenArchivosEnMemoria();
-      const bib = new Biblioteca(almacen, '0.4.0', () => 'x');
+      const { bib, almacen } = await nueva();
       await almacen.guardar('_borrador.json', '{{{ roto');
       expect(await bib.leerBorrador()).toBeNull();
    });
 
    it('borrarTodo vacía la biblioteca', async () => {
-      const bib = nueva();
+      const { bib } = await nueva();
       await bib.guardar({ programa: programa(), titulo: 'a', identidad: IDENTIDAD });
       await bib.guardar({ programa: programa(), titulo: 'b', identidad: IDENTIDAD });
 
       await bib.borrarTodo();
       expect(bib.archivos).toEqual([]);
+   });
+
+   it('sin llaves no se puede guardar, y lo dice', async () => {
+      const bib = new Biblioteca(
+         almacenArchivosEnMemoria(),
+         '0.5.0',
+         () => ({ alumno: null, profesorPublica: null, profesorPrivada: null }),
+         () => 'x.algx',
+      );
+      await expect(
+         bib.guardar({ programa: programa(), titulo: 'T', identidad: IDENTIDAD }),
+      ).rejects.toThrow(/llaves/);
    });
 });
 

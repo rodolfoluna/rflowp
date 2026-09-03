@@ -19,6 +19,9 @@
       onNuevo: () => void;
       onArchivos: () => void;
       onExportar: () => void;
+      /** Curso configurado, para mostrarlo de un vistazo. `null` si no hay. */
+      llaveCurso: string | null;
+      onLlaveCurso: () => void;
       onBorrarDatos: () => void;
       onCerrar: () => void;
    }
@@ -32,6 +35,8 @@
       onNuevo,
       onArchivos,
       onExportar,
+      llaveCurso,
+      onLlaveCurso,
       onBorrarDatos,
       onCerrar,
    }: Props = $props();
@@ -107,6 +112,16 @@
          <span class="texto">
             <strong>Nuevo algoritmo</strong>
             <small>Empezar desde cero</small>
+         </span>
+      </button>
+
+      <button onclick={onLlaveCurso} class:pendiente={!llaveCurso}>
+         <span class="icono" aria-hidden="true">🔑</span>
+         <span class="texto">
+            <strong>Llave del curso</strong>
+            <small>
+               {llaveCurso ?? 'Sin configurar: tu profesor no podrá abrir tus entregas'}
+            </small>
          </span>
       </button>
    </div>
@@ -250,6 +265,14 @@
    .texto small {
       font-size: 12px;
       color: var(--texto-tenue);
+   }
+
+   /* Sin llave de curso, las entregas no le sirven al profesor: se avisa. */
+   .grupo button.pendiente {
+      border-color: var(--aviso-borde);
+   }
+   .grupo button.pendiente small {
+      color: var(--aviso-texto);
    }
 
    .peligroso button {

@@ -4,19 +4,20 @@
  * El archivo tiene dos partes bien separadas:
  *
  *   encabezado  SIEMPRE en claro. Lleva quién lo hizo y cuándo. El profesor
- *               necesita poder leerlo sin descifrar nada para ordenar un lote
- *               de entregas y detectar duplicados.
- *   contenido   el algoritmo y su bitácora. Hoy va en claro; en la fase 5 este
- *               mismo campo pasa a llevar el sobre cifrado, sin que cambie el
- *               resto del contenedor ni el código que lo lee.
+ *               necesita poder ordenar un lote de entregas y detectar
+ *               duplicados sin descifrar nada.
+ *   carga       el algoritmo y su bitácora, dentro de un sobre cifrado.
  *
- * ⚠️ ESTADO ACTUAL: `alg` vale `"ninguno"`. Los archivos de esta fase **no
- * están protegidos**: cualquiera puede abrirlos con un editor de texto. La
- * protección llega en la fase 5. La app lo dice en pantalla; no se debe usar en
- * un curso real hasta entonces.
+ * El encabezado va en claro pero **cubierto por la firma**: alterar el nombre o
+ * el número de control invalida la firma del archivo.
+ *
+ * Se siguen leyendo los archivos `alg: "ninguno"` de versiones anteriores, para
+ * que nadie pierda a mitad de curso lo que ya tenía hecho. Los nuevos siempre
+ * se escriben cifrados.
  */
 
 import type { Program } from '../core/ast';
+import { ESQUEMA, type Sobre } from '../crypto/sobre';
 
 /** Versión del formato. Sube cuando el contenedor deje de ser compatible. */
 export const FORMATO = 'algx/1';
@@ -24,7 +25,7 @@ export const FORMATO = 'algx/1';
 /** Marca que identifica el archivo antes de intentar interpretarlo. */
 const MAGIC = 'RFLOWP';
 
-export type Algoritmo = 'ninguno' | 'A256GCM+ECIES-P256';
+export type Algoritmo = 'ninguno' | typeof ESQUEMA;
 
 export interface AutorArchivo {
    numeroControl: string;
@@ -35,7 +36,7 @@ export interface AutorArchivo {
 export interface Encabezado {
    magic: string;
    fmt: string;
-   /** Cómo está protegido el contenido. `ninguno` mientras no llegue la fase 5. */
+   /** Cómo está protegido el contenido. */
    alg: Algoritmo;
    autor: AutorArchivo;
    /** Instalación que lo generó. Dos entregas con el mismo valor son sospechosas. */
@@ -67,9 +68,14 @@ export interface Contenido {
    bitacora: Bitacora;
 }
 
-export interface Archivo {
+/** Lo que se puede leer de un archivo sin tener ninguna llave. */
+export type Carga =
+   | { cifrado: false; contenido: Contenido }
+   | { cifrado: true; sobre: Sobre };
+
+export interface ArchivoLeido {
    encabezado: Encabezado;
-   contenido: Contenido;
+   carga: Carga;
 }
 
 export function bitacoraNueva(): Bitacora {
@@ -82,6 +88,33 @@ export class ErrorArchivo extends Error {
       super(message);
       this.name = 'ErrorArchivo';
    }
+}
+
+// ---------------------------------------------------------------------------
+// Encabezado canónico
+// ---------------------------------------------------------------------------
+
+/**
+ * Serialización determinista del encabezado, para firmar y verificar.
+ *
+ * Se usa un array y no un objeto porque el orden de las claves de un objeto
+ * depende de cómo se construyó: firmar sobre `{a,b}` y verificar sobre `{b,a}`
+ * produciría bytes distintos y la firma nunca cuadraría.
+ */
+export function encabezadoCanonico(e: Encabezado): string {
+   return JSON.stringify([
+      e.magic,
+      e.fmt,
+      e.alg,
+      e.autor.numeroControl,
+      e.autor.nombre,
+      e.autor.grupo ?? '',
+      e.deviceId,
+      e.titulo,
+      e.creado,
+      e.modificado,
+      e.appVersion,
+   ]);
 }
 
 // ---------------------------------------------------------------------------
@@ -98,34 +131,41 @@ interface Envoltura {
    creado: string;
    modificado: string;
    appVersion: string;
-   /**
-    * El contenido. Hoy es el objeto tal cual; en la fase 5 será una cadena en
-    * base64 con el sobre cifrado. Se deja como `unknown` para que el cambio no
-    * obligue a tocar el tipo del contenedor.
-    */
-   contenido: unknown;
+   /** Presente solo en archivos sin cifrar de versiones anteriores. */
+   contenido?: unknown;
+   /** Presente en los archivos cifrados. */
+   sobre?: Sobre;
 }
 
-export function serializar(archivo: Archivo): string {
-   const envoltura: Envoltura = {
+function envolturaDe(encabezado: Encabezado): Omit<Envoltura, 'contenido' | 'sobre'> {
+   return {
       magic: MAGIC,
-      fmt: archivo.encabezado.fmt,
-      alg: archivo.encabezado.alg,
-      autor: archivo.encabezado.autor,
-      deviceId: archivo.encabezado.deviceId,
-      titulo: archivo.encabezado.titulo,
-      creado: archivo.encabezado.creado,
-      modificado: archivo.encabezado.modificado,
-      appVersion: archivo.encabezado.appVersion,
-      contenido: archivo.contenido,
+      fmt: encabezado.fmt,
+      alg: encabezado.alg,
+      autor: encabezado.autor,
+      deviceId: encabezado.deviceId,
+      titulo: encabezado.titulo,
+      creado: encabezado.creado,
+      modificado: encabezado.modificado,
+      appVersion: encabezado.appVersion,
    };
-
-   // Sin sangrado: el archivo no está pensado para leerse a mano, y en la
-   // fase 5 el contenido será opaco de todos modos.
-   return JSON.stringify(envoltura);
 }
 
-export function deserializar(texto: string): Archivo {
+/** Escribe un archivo cifrado. */
+export function serializarCifrado(encabezado: Encabezado, sobre: Sobre): string {
+   return JSON.stringify({ ...envolturaDe(encabezado), sobre });
+}
+
+/** Escribe un archivo sin cifrar. Solo para pruebas y compatibilidad. */
+export function serializarEnClaro(encabezado: Encabezado, contenido: Contenido): string {
+   return JSON.stringify({
+      ...envolturaDe({ ...encabezado, alg: 'ninguno' }),
+      alg: 'ninguno' as Algoritmo,
+      contenido,
+   });
+}
+
+export function deserializar(texto: string): ArchivoLeido {
    let bruto: unknown;
    try {
       bruto = JSON.parse(texto);
@@ -149,11 +189,32 @@ export function deserializar(texto: string): Archivo {
       );
    }
 
+   if (!e.autor || typeof e.autor.numeroControl !== 'string') {
+      throw new ErrorArchivo('El archivo no dice quién lo hizo.');
+   }
+
+   const encabezado: Encabezado = {
+      magic: MAGIC,
+      fmt: e.fmt,
+      alg: e.alg === ESQUEMA ? ESQUEMA : 'ninguno',
+      autor: e.autor,
+      deviceId: e.deviceId ?? '',
+      titulo: e.titulo ?? 'Sin título',
+      creado: e.creado ?? '',
+      modificado: e.modificado ?? '',
+      appVersion: e.appVersion ?? '',
+   };
+
+   if (e.alg === ESQUEMA) {
+      if (!e.sobre || typeof e.sobre.ct !== 'string') {
+         throw new ErrorArchivo('El archivo está incompleto o dañado.');
+      }
+      return { encabezado, carga: { cifrado: true, sobre: e.sobre } };
+   }
+
    if (e.alg !== 'ninguno') {
-      // Llegará cuando exista la fase 5 y alguien abra un archivo cifrado con
-      // una build vieja. Mejor decirlo claro que fallar de forma rara.
       throw new ErrorArchivo(
-         'Este archivo está protegido y esta versión de la app no puede abrirlo.',
+         `Este archivo usa una protección que esta versión no conoce (${String(e.alg)}).`,
       );
    }
 
@@ -162,60 +223,43 @@ export function deserializar(texto: string): Archivo {
       throw new ErrorArchivo('El archivo está incompleto o dañado.');
    }
 
-   if (!e.autor || typeof e.autor.numeroControl !== 'string') {
-      throw new ErrorArchivo('El archivo no dice quién lo hizo.');
-   }
-
    return {
-      encabezado: {
-         magic: MAGIC,
-         fmt: e.fmt,
-         alg: e.alg,
-         autor: e.autor,
-         deviceId: e.deviceId ?? '',
-         titulo: e.titulo ?? 'Sin título',
-         creado: e.creado ?? '',
-         modificado: e.modificado ?? '',
-         appVersion: e.appVersion ?? '',
-      },
-      contenido: {
-         programa: contenido.programa,
-         bitacora: { ...bitacoraNueva(), ...(contenido.bitacora ?? {}) },
+      encabezado,
+      carga: {
+         cifrado: false,
+         contenido: {
+            programa: contenido.programa,
+            bitacora: { ...bitacoraNueva(), ...(contenido.bitacora ?? {}) },
+         },
       },
    };
 }
 
-/**
- * Construye un archivo nuevo a partir del programa y de quién lo escribió.
- */
-export function crearArchivo(opciones: {
-   programa: Program;
+// ---------------------------------------------------------------------------
+// Construcción
+// ---------------------------------------------------------------------------
+
+export function crearEncabezado(opciones: {
    titulo: string;
    autor: AutorArchivo;
    deviceId: string;
    appVersion: string;
-   bitacora?: Bitacora;
+   alg: Algoritmo;
    creado?: string;
    ahora?: () => Date;
-}): Archivo {
+}): Encabezado {
    const ahora = (opciones.ahora ?? (() => new Date()))().toISOString();
 
    return {
-      encabezado: {
-         magic: MAGIC,
-         fmt: FORMATO,
-         alg: 'ninguno',
-         autor: opciones.autor,
-         deviceId: opciones.deviceId,
-         titulo: opciones.titulo,
-         creado: opciones.creado ?? ahora,
-         modificado: ahora,
-         appVersion: opciones.appVersion,
-      },
-      contenido: {
-         programa: opciones.programa,
-         bitacora: opciones.bitacora ?? bitacoraNueva(),
-      },
+      magic: MAGIC,
+      fmt: FORMATO,
+      alg: opciones.alg,
+      autor: opciones.autor,
+      deviceId: opciones.deviceId,
+      titulo: opciones.titulo.trim() || 'Sin título',
+      creado: opciones.creado ?? ahora,
+      modificado: ahora,
+      appVersion: opciones.appVersion,
    };
 }
 

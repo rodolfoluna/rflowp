@@ -5,11 +5,12 @@
     * Es destructivo e irreversible, así que pide escribir la palabra en vez de
     * un botón que se pulsa sin leer, y dice exactamente qué se va a perder.
     *
-    * Sobre la honestidad del texto: en la versión actual los archivos `.algx`
-    * que el alumno ya exportó **no están cifrados**, así que borrar la identidad
-    * no los vuelve ilegibles. Decir lo contrario sería mentirle. Cuando llegue
-    * el cifrado (fase 5), el aviso cambia y pasa a ser cierto: la llave se
-    * destruye con la identidad y solo el profesor podrá abrirlos.
+    * El aviso sobre los archivos ya exportados cambia según la situación real:
+    * borrar destruye la llave maestra, así que esos archivos dejan de abrirse
+    * en esta app. Pero solo son recuperables si estaba configurada la llave del
+    * curso cuando se crearon; si no, no los abre nadie, ni el profesor. Se dice
+    * cada cosa cuando toca en vez de una frase genérica que sería falsa la
+    * mitad de las veces.
     */
    import type { Identidad } from './identidad';
 
@@ -17,11 +18,14 @@
       identidad: Identidad;
       /** Cuántos algoritmos hay guardados dentro de la app. */
       guardados: number;
+      /** ¿Está configurada la llave del curso? Cambia qué se puede recuperar. */
+      hayLlaveDeProfesor: boolean;
       onConfirmar: () => void;
       onCancelar: () => void;
    }
 
-   let { identidad, guardados, onConfirmar, onCancelar }: Props = $props();
+   let { identidad, guardados, hayLlaveDeProfesor, onConfirmar, onCancelar }: Props =
+      $props();
 
    const PALABRA = 'BORRAR';
    let escrito = $state('');
@@ -51,14 +55,22 @@
                  ? '1 algoritmo guardado dentro de la app.'
                  : `${guardados} algoritmos guardados dentro de la app.`}
          </li>
+         <li>Tu llave personal, la que cifra y firma tus algoritmos.</li>
       </ul>
 
       <p class="fuerte">Esto no se puede deshacer.</p>
 
-      <p class="nota">
-         Los archivos <code>.algx</code> que ya hayas exportado seguirán existiendo fuera de
-         la app. En esta versión todavía <strong>no están protegidos</strong>: se pueden abrir
-         sin tu identidad.
+      <p class="nota" class:grave={!hayLlaveDeProfesor}>
+         Los archivos <code>.algx</code> que ya hayas exportado
+         <strong>dejarán de abrirse en esta app para siempre</strong>, aunque vuelvas a
+         escribir tu nombre y tu número de control: la llave que los cifró se destruye
+         ahora y no hay forma de recuperarla.
+         {#if hayLlaveDeProfesor}
+            Tu profesor sí podrá abrirlos con la llave del curso.
+         {:else}
+            Y como <strong>no tienes configurada la llave del curso</strong>, tampoco tu
+            profesor podrá abrirlos. Nadie podrá.
+         {/if}
       </p>
 
       <label>
@@ -145,6 +157,11 @@
       border: 1px solid var(--aviso-borde);
       border-radius: 9px;
       padding: 9px 11px;
+   }
+   .nota.grave {
+      background: transparent;
+      color: var(--error);
+      border-color: var(--error);
    }
    .nota code {
       font-family: var(--fuente-mono);

@@ -30,9 +30,17 @@
       hayOPFS,
       pedirPersistencia,
    } from './file/almacenes';
-   import { Biblioteca } from './file/biblioteca.svelte';
-   import { crearArchivo, nombreSugerido, serializar } from './file/algx';
+   import { Biblioteca, type ContextoCripto } from './file/biblioteca.svelte';
+   import { nombreSugerido } from './file/algx';
    import { descargar } from './file/transferencia';
+   import PanelProfesor from './crypto/PanelProfesor.svelte';
+   import {
+      almacenLlavesIndexedDB,
+      almacenProfesorIndexedDB,
+      generarLlavesAlumno,
+      type ConfigProfesor,
+      type LlavesAlumno,
+   } from './crypto/llaves';
    import { APP_VERSION } from './ui/version';
    import { EJEMPLO_INICIAL } from './ui/ejemplos';
 
@@ -42,11 +50,26 @@
    const doc = new Documento(EJEMPLO_INICIAL);
 
    const almacenIdentidad = almacenIdentidadIndexedDB();
+   const almacenLlaves = almacenLlavesIndexedDB();
+   const almacenProfesor = almacenProfesorIndexedDB();
+
+   /** Llaves de esta instalación. Sin ellas no se puede cifrar ni abrir nada. */
+   let llaves = $state.raw<LlavesAlumno | null>(null);
+   /** Llave del curso: la pública del profesor y, en modo profesor, la privada. */
+   let configProfesor = $state.raw<ConfigProfesor | null>(null);
+
+   const modoProfesor = $derived(configProfesor?.privada != null);
+
    // Sin OPFS no se puede guardar entre sesiones, pero la app debe seguir
    // siendo usable: se cae a un almacén en memoria y se avisa.
    const biblioteca = new Biblioteca(
       hayOPFS() ? almacenArchivosOPFS() : almacenArchivosEnMemoria(),
       APP_VERSION,
+      (): ContextoCripto => ({
+         alumno: llaves,
+         profesorPublica: configProfesor?.publica ?? null,
+         profesorPrivada: configProfesor?.privada ?? null,
+      }),
    );
 
    let identidad = $state<Identidad | null>(null);
@@ -60,6 +83,7 @@
 
    let menuAbierto = $state(false);
    let panelArchivos = $state(false);
+   let panelProfesor = $state(false);
    let borrandoDatos = $state(false);
    /** Cuando no es null, se está pidiendo un título para guardar. */
    let pidiendoTitulo = $state<{ como: boolean } | null>(null);
@@ -101,6 +125,24 @@
          // puede recordar la identidad, pero se puede trabajar en la sesión.
          identidad = null;
          sinAlmacenamiento = true;
+      }
+
+      try {
+         llaves = await almacenLlaves.leer();
+         configProfesor = await almacenProfesor.leer();
+      } catch {
+         llaves = null;
+      }
+
+      // Identidad sin llaves: pasó por una versión anterior al cifrado. Se le
+      // generan ahora para que pueda seguir trabajando.
+      if (identidad && !llaves) {
+         llaves = await generarLlavesAlumno();
+         try {
+            await almacenLlaves.guardar(llaves);
+         } catch {
+            sinAlmacenamiento = true;
+         }
       }
 
       if (identidad) {
@@ -150,11 +192,17 @@
       grupo?: string;
    }) {
       const nueva = crearIdentidad(datos, () => crypto.randomUUID());
+      // Las llaves se generan junto con la identidad: son la misma cosa desde
+      // el punto de vista del alumno, y sin ellas no podría guardar nada.
+      const nuevasLlaves = await generarLlavesAlumno();
+
       try {
          await almacenIdentidad.guardar(nueva);
+         await almacenLlaves.guardar(nuevasLlaves);
       } catch {
          sinAlmacenamiento = true;
       }
+      llaves = nuevasLlaves;
       identidad = nueva;
       // Se pide justo aquí, tras un gesto del usuario: es cuando el navegador
       // es más propenso a concederla.
@@ -206,7 +254,16 @@
          tituloActual = archivo.encabezado.titulo;
          nodoSeleccionado = undefined;
          panelArchivos = false;
-         anunciar(`Abierto «${tituloActual}»`);
+
+         if (archivo.como === 'profesor' && !archivo.firmaValida) {
+            // Lo más importante que puede saber un profesor al abrir una
+            // entrega: el encabezado no coincide con lo que se firmó.
+            anunciar(`⚠ «${tituloActual}»: el archivo fue alterado después de crearse.`);
+         } else if (archivo.como === 'profesor') {
+            anunciar(`Abierto «${tituloActual}» de ${archivo.encabezado.autor.nombre}`);
+         } else {
+            anunciar(`Abierto «${tituloActual}»`);
+         }
       } catch (e) {
          anunciar(e instanceof Error ? e.message : 'No se pudo abrir.');
       }
@@ -234,33 +291,39 @@
     * Se construye el archivo al vuelo para no obligar a guardar antes de
     * entregar: es un paso extra que el alumno olvidaría justo al final.
     */
-   function exportar() {
+   async function exportar() {
       if (!identidad) return;
       menuAbierto = false;
 
-      const archivo = crearArchivo({
-         programa: doc.programa,
-         titulo: tituloActual,
-         autor: {
-            numeroControl: identidad.numeroControl,
-            nombre: identidad.nombre,
-            ...(identidad.grupo ? { grupo: identidad.grupo } : {}),
-         },
-         deviceId: identidad.deviceId,
-         appVersion: APP_VERSION,
-      });
-
-      const nombre = nombreSugerido(archivo.encabezado);
-      descargar(nombre, serializar(archivo));
-      anunciar(`Se descargó ${nombre}`);
+      try {
+         const { encabezado, texto } = await biblioteca.construir({
+            programa: doc.programa,
+            titulo: tituloActual,
+            identidad,
+         });
+         const nombre = nombreSugerido(encabezado);
+         descargar(nombre, texto);
+         anunciar(
+            configProfesor?.publica
+               ? `Se descargó ${nombre}`
+               : `Se descargó ${nombre}, pero tu profesor no podrá abrirlo: falta la llave del curso.`,
+         );
+      } catch (e) {
+         anunciar(e instanceof Error ? e.message : 'No se pudo exportar.');
+      }
    }
 
    async function borrarDatos() {
       try {
          await almacenIdentidad.borrar();
+         // Destruir la llave maestra es lo que hace real la advertencia del
+         // diálogo: sin ella, los archivos ya exportados dejan de abrirse en
+         // esta app, y solo el profesor puede recuperarlos.
+         await almacenLlaves.borrar();
       } catch {
          // Si no se pudo tocar IndexedDB igual se limpia la sesión.
       }
+      llaves = null;
       await biblioteca.borrarTodo();
 
       await reiniciarDocumento();
@@ -619,6 +682,13 @@
             panelArchivos = true;
          }}
          onExportar={exportar}
+         onLlaveCurso={() => {
+            menuAbierto = false;
+            panelProfesor = true;
+         }}
+         llaveCurso={configProfesor
+            ? `${configProfesor.etiqueta}${modoProfesor ? ' · modo profesor' : ''}`
+            : null}
          onBorrarDatos={() => {
             menuAbierto = false;
             borrandoDatos = true;
@@ -653,10 +723,26 @@
       />
    {/if}
 
+   {#if panelProfesor}
+      <PanelProfesor
+         config={configProfesor}
+         onGuardar={async (config) => {
+            await almacenProfesor.guardar(config);
+            configProfesor = config;
+         }}
+         onQuitar={async () => {
+            await almacenProfesor.borrar();
+            configProfesor = null;
+         }}
+         onCerrar={() => (panelProfesor = false)}
+      />
+   {/if}
+
    {#if borrandoDatos}
       <BorrarDatos
          {identidad}
          guardados={biblioteca.archivos.length}
+         hayLlaveDeProfesor={configProfesor?.publica != null}
          onConfirmar={borrarDatos}
          onCancelar={() => (borrandoDatos = false)}
       />
