@@ -8,6 +8,7 @@
     * directo en la barra.
     */
    import { iniciales, type Identidad } from '../identity/identidad';
+   import type { PreferenciaTema, Tema } from './tema.svelte';
 
    interface Props {
       identidad: Identidad;
@@ -25,6 +26,7 @@
       /** Con la llave privada cargada aparece la revisión de entregas. */
       modoProfesor: boolean;
       onRevisarLote: () => void;
+      preferenciaTema: PreferenciaTema;
       onBorrarDatos: () => void;
       onCerrar: () => void;
    }
@@ -42,6 +44,7 @@
       onLlaveCurso,
       modoProfesor,
       onRevisarLote,
+      preferenciaTema,
       onBorrarDatos,
       onCerrar,
    }: Props = $props();
@@ -49,6 +52,12 @@
    function alTeclear(e: KeyboardEvent) {
       if (e.key === 'Escape') onCerrar();
    }
+
+   const TEMAS: Array<{ valor: Tema; etiqueta: string; icono: string }> = [
+      { valor: 'sistema', etiqueta: 'Automático', icono: '◐' },
+      { valor: 'claro', etiqueta: 'Claro', icono: '☀' },
+      { valor: 'oscuro', etiqueta: 'Oscuro', icono: '☾' },
+   ];
 </script>
 
 <svelte:window onkeydown={alTeclear} />
@@ -139,6 +148,23 @@
             </span>
          </button>
       {/if}
+   </div>
+
+   <div class="tema">
+      <span class="rotulo">Tema</span>
+      <div class="opciones" role="radiogroup" aria-label="Tema de la aplicación">
+         {#each TEMAS as t (t.valor)}
+            <button
+               role="radio"
+               aria-checked={preferenciaTema.tema === t.valor}
+               class:activa={preferenciaTema.tema === t.valor}
+               onclick={() => preferenciaTema.elegir(t.valor)}
+            >
+               <span aria-hidden="true">{t.icono}</span>
+               {t.etiqueta}
+            </button>
+         {/each}
+      </div>
    </div>
 
    <div class="grupo peligroso">
@@ -288,6 +314,48 @@
    }
    .grupo button.pendiente small {
       color: var(--aviso-texto);
+   }
+
+   .tema {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 2px;
+   }
+   .rotulo {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--texto-tenue);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+   }
+   .opciones {
+      display: flex;
+      gap: 3px;
+      margin-left: auto;
+      background: var(--fondo);
+      border: 1px solid var(--borde);
+      border-radius: 10px;
+      padding: 3px;
+   }
+   .opciones button {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      border: 0;
+      background: transparent;
+      color: var(--texto-tenue);
+      border-radius: 7px;
+      /* 36px de alto: cómodo para el pulgar sin ocupar toda la hoja. */
+      min-height: 36px;
+      padding: 0 10px;
+      font-size: 13px;
+      cursor: pointer;
+   }
+   .opciones button.activa {
+      background: var(--superficie-alta);
+      color: var(--texto);
    }
 
    .peligroso button {

@@ -45,6 +45,7 @@
       type LlavesAlumno,
    } from './crypto/llaves';
    import { APP_VERSION } from './ui/version';
+   import { PreferenciaTema } from './ui/tema.svelte';
    import { EJEMPLO_INICIAL } from './ui/ejemplos';
 
    type Vista = 'codigo' | 'diagrama';
@@ -86,6 +87,9 @@
 
    const guardas = new Guardas();
    const cronista = new Cronista();
+   // Se construye aquí, antes del primer pintado, para no soltar un destello
+   // blanco a quien tiene el tema oscuro puesto.
+   const preferenciaTema = new PreferenciaTema();
 
    let menuAbierto = $state(false);
    let panelArchivos = $state(false);
@@ -716,6 +720,7 @@
             menuAbierto = false;
             panelLote = true;
          }}
+         {preferenciaTema}
          llaveCurso={configProfesor
             ? `${configProfesor.etiqueta}${modoProfesor ? ' · modo profesor' : ''}`
             : null}

@@ -3,15 +3,18 @@
  *
  * Los colores de los símbolos heredan la paleta ANSI de PseudoFlow (BSD-3),
  * ajustada para que el texto encima cumpla contraste AA en ambos temas.
+ *
+ * El tema oscuro se aplica en dos situaciones y la paleta se declara UNA sola
+ * vez, en un mixin: duplicarla obligaría a cambiar cada color en dos sitios, y
+ * tarde o temprano uno de los dos se olvidaría.
+ *
+ *   1. El sistema pide oscuro y el usuario no ha elegido claro a mano.
+ *   2. El usuario eligió oscuro explícitamente.
+ *
+ * `data-tema` lo pone `ui/tema.svelte.ts` en el elemento raíz.
  */
 
-:root {
-   color-scheme: light dark;
-
-   --fuente-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo,
-      Consolas, monospace;
-
-   /* Tema claro */
+@mixin paleta-clara {
    --fondo: #f6f7f9;
    --superficie: #ffffff;
    --superficie-alta: #eceef2;
@@ -39,33 +42,60 @@
    --linea: #6b7180;
 }
 
+@mixin paleta-oscura {
+   --fondo: #14161a;
+   --superficie: #1c1f25;
+   --superficie-alta: #2a2e37;
+   --lienzo: #101216;
+   --borde: #2f343d;
+   --texto: #e6e9ee;
+   --texto-tenue: #9aa2b1;
+   --texto-debil: #6b7280;
+   --acento: #00d98a;
+   --activo: #ffa726;
+   --error: #ff6b6b;
+
+   --aviso-fondo: #2e2409;
+   --aviso-texto: #ffd77a;
+   --aviso-borde: #5c4712;
+
+   --c-terminador: #4d5166;
+   --c-proceso: #00b578;
+   --c-datos: #2b8fd6;
+   --c-decision: #c99a1f;
+   --c-preparacion: #7d5bab;
+   --borde-simbolo: #0d0f13;
+   --texto-simbolo: #080b0e;
+   --linea: #7d8595;
+}
+
+:root {
+   --fuente-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo,
+      Consolas, monospace;
+
+   /* Claro es la base; el oscuro lo sobrescribe. */
+   color-scheme: light;
+   @include paleta-clara;
+}
+
+/* El sistema pide oscuro y el usuario no forzó claro. */
 @media (prefers-color-scheme: dark) {
-   :root {
-      --fondo: #14161a;
-      --superficie: #1c1f25;
-      --superficie-alta: #2a2e37;
-      --lienzo: #101216;
-      --borde: #2f343d;
-      --texto: #e6e9ee;
-      --texto-tenue: #9aa2b1;
-      --texto-debil: #6b7280;
-      --acento: #00d98a;
-      --activo: #ffa726;
-      --error: #ff6b6b;
-
-      --aviso-fondo: #2e2409;
-      --aviso-texto: #ffd77a;
-      --aviso-borde: #5c4712;
-
-      --c-terminador: #4d5166;
-      --c-proceso: #00b578;
-      --c-datos: #2b8fd6;
-      --c-decision: #c99a1f;
-      --c-preparacion: #7d5bab;
-      --borde-simbolo: #0d0f13;
-      --texto-simbolo: #080b0e;
-      --linea: #7d8595;
+   :root:not([data-tema='claro']) {
+      color-scheme: dark;
+      @include paleta-oscura;
    }
+}
+
+/* El usuario eligió oscuro: manda sobre lo que diga el sistema. */
+:root[data-tema='oscuro'] {
+   color-scheme: dark;
+   @include paleta-oscura;
+}
+
+/* Y eligió claro: también manda. */
+:root[data-tema='claro'] {
+   color-scheme: light;
+   @include paleta-clara;
 }
 
 * {
