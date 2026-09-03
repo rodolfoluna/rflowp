@@ -101,6 +101,19 @@ npm run check
 npm run build
 ```
 
+Queda todo en `dist/`: archivos estáticos, sin servidor de aplicaciones ni base
+de datos. Si la app va a vivir en una **subcarpeta** (GitHub Pages en un
+repositorio normal), hay que decirlo al construir, o el manifiesto apuntará a la
+raíz y el navegador se negará a instalar la PWA:
+
+```bash
+RFLOWP_BASE=/rflowp/ npm run build
+```
+
+El manual completo —dónde alojarla, cómo la instala cada sistema, y por qué las
+tiendas de aplicaciones casi nunca compensan— está en
+[`docs/manual-de-distribucion.html`](docs/manual-de-distribucion.html).
+
 ---
 
 ## Arquitectura
@@ -132,7 +145,7 @@ consecuencia del diseño y no un problema de sincronización.
 | `src/teacher/` | Detección de copias y panel de revisión de lote |
 | `src/file/` | Formato `.algx`, almacenes, biblioteca y transferencia |
 | `src/ui/` | Ejemplos, menú, tema y piezas de interfaz |
-| `docs/` | Instructivos de una página para alumnos y profesor |
+| `docs/` | Instructivos de una página y manual de distribución |
 | `tests/` | Ciclo de ida y vuelta, intérprete, layout, mutaciones, documento, comentarios |
 
 Decisiones que conviene no deshacer sin pensarlo:
@@ -356,7 +369,17 @@ Estos pasos no los sustituye ninguna prueba automática:
 5. Sustituir los iconos PNG de relleno de `public/`.
 
 Las dos hojas de [`docs/`](docs/) están hechas para imprimirse: la del alumno en
-verde y la del profesor en violeta, para que no se repartan cambiadas.
+verde y la del profesor en violeta, para que no se repartan cambiadas. El
+[manual de distribución](docs/manual-de-distribucion.html) va en azul y **no se
+reparte**: es para quien publica la app.
+
+Dos avisos del manual que conviene no descubrir tarde:
+
+- **Sin HTTPS la app no funciona.** El cifrado, el almacenamiento de archivos y
+  el modo sin conexión lo exigen. Una IP de la red local por `http://` no sirve.
+- **La dirección es la identidad.** Los datos del alumno viven atados al origen
+  exacto. Cambiar de dominio después de repartirlo deja a todo el grupo sin
+  acceso a lo que guardó.
 
 ## Pendiente antes de liberar
 

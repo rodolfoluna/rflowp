@@ -1,0 +1,590 @@
+<title>Distribuir RFlowP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;600;700&display=swap">
+
+<style>
+   /*
+    * Tercer miembro de la familia de documentos: los instructivos son verde
+    * (alumno) y violeta (profesor); este va en azul de acero, porque es el de
+    * infraestructura y no debe confundirse con ninguna hoja repartible.
+    */
+   :root {
+      --papel: #ffffff;
+      --papel-hueco: #f2f5f7;
+      --tinta: #131a1f;
+      --tinta-suave: #515e67;
+      --tinta-tenue: #7b8891;
+      --regla: #d5dee3;
+
+      --acento: #12556f;
+      --acento-hueco: #e6f1f5;
+      --alerta: #a8261f;
+      --alerta-hueco: #fbeceb;
+      --aviso: #7a5300;
+      --aviso-hueco: #fdf3dd;
+      --bien: #14663f;
+
+      --display: 'Bricolage Grotesque', 'Trebuchet MS', sans-serif;
+      --texto: 'Public Sans', -apple-system, 'Segoe UI', sans-serif;
+      --mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace;
+   }
+
+   @media (prefers-color-scheme: dark) {
+      :root:not([data-theme='light']) {
+         --papel: #101518;
+         --papel-hueco: #182026;
+         --tinta: #e6eef2;
+         --tinta-suave: #a2b0b8;
+         --tinta-tenue: #74838c;
+         --regla: #27333a;
+         --acento: #5fc0e0;
+         --acento-hueco: #11262e;
+         --alerta: #ff8479;
+         --alerta-hueco: #2c1614;
+         --aviso: #f0c96a;
+         --aviso-hueco: #2b2209;
+         --bien: #4fd191;
+      }
+   }
+
+   :root[data-theme='dark'] {
+      --papel: #101518;
+      --papel-hueco: #182026;
+      --tinta: #e6eef2;
+      --tinta-suave: #a2b0b8;
+      --tinta-tenue: #74838c;
+      --regla: #27333a;
+      --acento: #5fc0e0;
+      --acento-hueco: #11262e;
+      --alerta: #ff8479;
+      --alerta-hueco: #2c1614;
+      --aviso: #f0c96a;
+      --aviso-hueco: #2b2209;
+      --bien: #4fd191;
+   }
+
+   * { box-sizing: border-box; }
+
+   body {
+      margin: 0;
+      background: var(--papel);
+      color: var(--tinta);
+      font-family: var(--texto);
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+   }
+
+   .hoja {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 40px 28px 72px;
+      display: flex;
+      flex-direction: column;
+      gap: 34px;
+   }
+
+   /* ---- Cabecera ---- */
+   header {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      border-bottom: 3px solid var(--acento);
+      padding-bottom: 16px;
+   }
+   .eyebrow {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: var(--acento);
+   }
+   h1 {
+      font-family: var(--display);
+      font-weight: 800;
+      font-size: clamp(30px, 6vw, 44px);
+      line-height: 1.02;
+      letter-spacing: -0.028em;
+      margin: 0;
+      text-wrap: balance;
+   }
+   .entrada {
+      margin: 0;
+      font-size: 16px;
+      color: var(--tinta-suave);
+      max-width: 62ch;
+   }
+
+   /* ---- Secciones ---- */
+   section {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+   }
+   h2 {
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 23px;
+      letter-spacing: -0.018em;
+      margin: 0;
+      text-wrap: balance;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--regla);
+   }
+   h3 {
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 17px;
+      margin: 8px 0 0;
+      letter-spacing: -0.01em;
+   }
+   p { margin: 0; max-width: 66ch; }
+   section > ul, section > ol { margin: 0; padding-left: 22px; max-width: 66ch; }
+   li { margin-bottom: 5px; }
+
+   code {
+      font-family: var(--mono);
+      font-size: 13.5px;
+      background: var(--papel-hueco);
+      border: 1px solid var(--regla);
+      border-radius: 4px;
+      padding: 1px 5px;
+      white-space: nowrap;
+   }
+
+   pre {
+      margin: 0;
+      background: var(--papel-hueco);
+      border: 1px solid var(--regla);
+      border-left: 3px solid var(--acento);
+      border-radius: 0 6px 6px 0;
+      padding: 12px 14px;
+      /* Los comandos largos se desplazan en su caja, no rompen la página. */
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--tinta);
+   }
+   pre code {
+      background: none;
+      border: 0;
+      padding: 0;
+      font-size: inherit;
+      white-space: pre;
+   }
+   pre .c { color: var(--tinta-tenue); }
+
+   /* ---- Tabla comparativa ---- */
+   .tabla-envoltura { overflow-x: auto; }
+   table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      min-width: 560px;
+   }
+   th, td {
+      text-align: left;
+      padding: 9px 12px 9px 0;
+      border-bottom: 1px solid var(--regla);
+      vertical-align: top;
+   }
+   thead th {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--tinta-tenue);
+      font-weight: 600;
+      border-bottom-width: 2px;
+   }
+   td:first-child { font-weight: 700; white-space: nowrap; padding-right: 16px; }
+   td small { display: block; color: var(--tinta-tenue); font-size: 12px; }
+   .si { color: var(--bien); font-weight: 600; }
+   .no { color: var(--alerta); font-weight: 600; }
+
+   /* ---- Recuadros: se gastan solo en lo irreversible ---- */
+   .caja {
+      border-left: 3px solid var(--aviso);
+      background: var(--aviso-hueco);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+   }
+   .caja.grave { border-left-color: var(--alerta); background: var(--alerta-hueco); }
+   .caja.nota { border-left-color: var(--acento); background: var(--acento-hueco); }
+   .caja h3 {
+      margin: 0;
+      font-size: 15px;
+      color: var(--aviso);
+   }
+   .caja.grave h3 { color: var(--alerta); }
+   .caja.nota h3 { color: var(--acento); }
+   .caja p, .caja li { font-size: 14px; color: var(--tinta-suave); }
+   .caja ul { margin: 2px 0 0; padding-left: 20px; }
+
+   /* ---- Lista de verificación final ---- */
+   .verificacion {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+   }
+   .verificacion li {
+      display: grid;
+      grid-template-columns: 20px 1fr;
+      gap: 11px;
+      align-items: start;
+      margin: 0;
+      font-size: 14.5px;
+   }
+   .verificacion li::before {
+      content: '';
+      width: 15px;
+      height: 15px;
+      margin-top: 4px;
+      border: 2px solid var(--acento);
+      border-radius: 3px;
+   }
+
+   footer {
+      border-top: 1px solid var(--regla);
+      padding-top: 14px;
+      font-size: 12.5px;
+      color: var(--tinta-tenue);
+      max-width: 66ch;
+   }
+
+   @page { margin: 14mm; }
+
+   @media print {
+      :root {
+         --papel: #ffffff;
+         --papel-hueco: #f3f5f6;
+         --tinta: #000000;
+         --tinta-suave: #2e373d;
+         --tinta-tenue: #5d666c;
+         --regla: #c6d0d5;
+         --acento: #0d4257;
+         --alerta: #8f1f19;
+         --aviso: #6b4800;
+         --bien: #0f4d2f;
+         --aviso-hueco: #ffffff;
+         --alerta-hueco: #ffffff;
+         --acento-hueco: #ffffff;
+      }
+      body { font-size: 10.4pt; line-height: 1.45; }
+      .hoja { padding: 0; gap: 22px; max-width: none; }
+      h1 { font-size: 26pt; }
+      h2 { font-size: 15pt; }
+      pre { font-size: 8.6pt; white-space: pre-wrap; overflow: visible; }
+      table { min-width: 0; font-size: 9pt; }
+      section, .caja, pre { break-inside: avoid; }
+   }
+</style>
+
+<div class="hoja">
+   <header>
+      <span class="eyebrow">RFlowP · Manual técnico</span>
+      <h1>Cómo publicar la app y llevarla a cada aparato</h1>
+      <p class="entrada">
+         RFlowP es una sola cosa —una aplicación web instalable— que se publica una vez y se
+         instala distinto en cada sistema. Esta guía cubre dónde alojarla, cómo la instala
+         cada alumno, y las dos vías nativas por si algún día hacen falta.
+      </p>
+   </header>
+
+   <section>
+      <h2>Dos reglas que mandan sobre todo lo demás</h2>
+
+      <div class="caja grave">
+         <h3>1 · Sin HTTPS la app no funciona. Nada de «casi»</h3>
+         <p>
+            El cifrado (<code>crypto.subtle</code>), el almacenamiento de archivos (OPFS) y el
+            funcionamiento sin conexión exigen conexión segura. Servir la app desde
+            <code>http://192.168.1.50</code> en la red del laboratorio <strong>no sirve</strong>:
+            la app carga a medias y falla al guardar. La única excepción es
+            <code>http://localhost</code> en la propia máquina.
+         </p>
+      </div>
+
+      <div class="caja grave">
+         <h3>2 · La dirección es la identidad. Elígela antes de repartirla</h3>
+         <p>
+            Todo lo del alumno —su identidad, sus llaves, sus algoritmos guardados— vive atado
+            a la dirección exacta desde la que abrió la app. Si mañana mueves la app de
+            <code>tec.github.io/rflowp/</code> a <code>algoritmos.tec.mx</code>,
+            <strong>todos tus alumnos aparecen como nuevos y pierden el acceso a lo que
+            guardaron</strong>. Tú podrás recuperar sus entregas con tu llave, pero es un
+            trastorno para el grupo entero.
+         </p>
+         <p>
+            Decide el dominio definitivo <em>antes</em> del primer día de clase, aunque de
+            momento apunte a algo provisional.
+         </p>
+      </div>
+   </section>
+
+   <section>
+      <h2>Dónde alojarla</h2>
+      <p>Las cuatro opciones razonables, con lo que de verdad las diferencia:</p>
+
+      <div class="tabla-envoltura">
+         <table>
+            <thead>
+               <tr>
+                  <th>Opción</th>
+                  <th>Costo</th>
+                  <th>Dominio propio</th>
+                  <th>Cuándo conviene</th>
+               </tr>
+            </thead>
+            <tbody>
+               <tr>
+                  <td>Cloudflare Pages<small>o Netlify</small></td>
+                  <td>Gratis</td>
+                  <td class="si">Sí</td>
+                  <td>
+                     La opción por omisión. HTTPS automático, se publica arrastrando la carpeta
+                     o conectando el repositorio, y admite dominio propio sin pagar.
+                  </td>
+               </tr>
+               <tr>
+                  <td>GitHub Pages</td>
+                  <td>Gratis</td>
+                  <td class="si">Sí</td>
+                  <td>
+                     Bien si el proyecto ya vive en GitHub. Ojo con la subcarpeta: hay que
+                     construir con <code>RFLOWP_BASE</code> (más abajo).
+                  </td>
+               </tr>
+               <tr>
+                  <td>Servidor de la escuela</td>
+                  <td>Ya pagado</td>
+                  <td class="si">Sí</td>
+                  <td>
+                     Si la institución exige que todo esté en su infraestructura. Necesitas que
+                     alguien de sistemas te dé HTTPS y una carpeta.
+                  </td>
+               </tr>
+               <tr>
+                  <td>Red local sin internet</td>
+                  <td>Gratis</td>
+                  <td class="no">No</td>
+                  <td>
+                     Solo si el laboratorio está aislado. Requiere montar HTTPS con certificado
+                     propio en cada equipo: es la opción más laboriosa con diferencia.
+                  </td>
+               </tr>
+            </tbody>
+         </table>
+      </div>
+   </section>
+
+   <section>
+      <h2>Construir la app</h2>
+      <p>Con Node 20 o más reciente, dentro de la carpeta del proyecto:</p>
+      <pre><code>npm ci
+npm run build</code></pre>
+      <p>
+         Queda todo en la carpeta <code>dist/</code>. Eso es lo que se sube: son archivos
+         estáticos, no necesitan servidor de aplicaciones ni base de datos.
+      </p>
+
+      <h3>Si la app va en una subcarpeta</h3>
+      <p>
+         Es el caso de GitHub Pages en un repositorio normal
+         (<code>usuario.github.io/rflowp/</code>). Hay que decírselo a la construcción, o la
+         PWA quedará apuntando a la raíz del dominio y el navegador se negará a instalarla:
+      </p>
+      <pre><code><span class="c"># Linux, macOS</span>
+RFLOWP_BASE=/rflowp/ npm run build
+
+<span class="c"># Windows, PowerShell</span>
+$env:RFLOWP_BASE='/rflowp/'; npm run build
+
+<span class="c"># Windows, Git Bash — el prefijo es obligatorio o convierte
+# la ruta en «C:/Program Files/Git/rflowp/»</span>
+MSYS_NO_PATHCONV=1 RFLOWP_BASE=/rflowp/ npm run build</code></pre>
+
+      <div class="caja nota">
+         <h3>Cómo comprobar que quedó bien</h3>
+         <p>
+            Abre <code>dist/manifest.webmanifest</code>. Sus campos <code>start_url</code> y
+            <code>scope</code> tienen que coincidir con la carpeta desde la que servirás la app.
+            Si dicen <code>/</code> y la app vive en <code>/rflowp/</code>, no se instalará.
+         </p>
+      </div>
+
+      <h3>Publicación automática en GitHub Pages</h3>
+      <p>
+         El repositorio ya trae <code>.github/workflows/publicar.yml</code>. Para activarlo:
+         en el repositorio, <em>Settings → Pages → Source: GitHub Actions</em>, y ajusta
+         <code>RFLOWP_BASE</code> dentro del archivo al nombre de tu repositorio. A partir de
+         ahí cada cambio en <code>main</code> se publica solo, y no se publica si fallan las
+         pruebas.
+      </p>
+
+      <h3>Si lo sirves con tu propio nginx</h3>
+      <pre><code>server {
+    listen 443 ssl;
+    server_name algoritmos.ejemplo.mx;
+    root /var/www/rflowp;
+
+    <span class="c"># El service worker NUNCA debe quedarse cacheado: si el navegador
+    # se queda con uno viejo, los alumnos no reciben las actualizaciones.</span>
+    location = /sw.js {
+        add_header Cache-Control "no-cache";
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}</code></pre>
+   </section>
+
+   <section>
+      <h2>Cómo la instala cada alumno</h2>
+      <p>
+         Una vez publicada, no hay nada que descargar de ninguna tienda: se abre la dirección
+         y se instala desde el propio navegador. Esto ya viene explicado en el instructivo del
+         alumno; aquí está lo que conviene que sepas tú.
+      </p>
+
+      <div class="tabla-envoltura">
+         <table>
+            <thead>
+               <tr>
+                  <th>Sistema</th>
+                  <th>Cómo</th>
+                  <th>Lo que hay que vigilar</th>
+               </tr>
+            </thead>
+            <tbody>
+               <tr>
+                  <td>Android</td>
+                  <td>Chrome: menú → <em>Instalar aplicación</em></td>
+                  <td>Sin problemas. Es la plataforma donde todo funciona como está previsto.</td>
+               </tr>
+               <tr>
+                  <td>iPhone / iPad</td>
+                  <td>Safari: <em>Compartir → Agregar a inicio</em></td>
+                  <td>
+                     <strong>Solo Safari puede instalarla.</strong> Desde Chrome en iPhone no
+                     aparece la opción, y varios alumnos se atascarán ahí. Además, lo que guarden
+                     en Safari y lo que guarden en la app instalada son almacenes distintos: hay
+                     que instalarla <em>antes</em> de empezar a trabajar.
+                  </td>
+               </tr>
+               <tr>
+                  <td>Windows / macOS / Linux</td>
+                  <td>Chrome o Edge: icono de instalar en la barra de direcciones</td>
+                  <td>Firefox no instala PWAs; funciona igual como página web normal.</td>
+               </tr>
+            </tbody>
+         </table>
+      </div>
+
+      <div class="caja">
+         <h3>Los datos de iOS pueden borrarse solos</h3>
+         <p>
+            Safari borra los datos de un sitio tras siete días sin usarlo. Las apps
+            <strong>instaladas en la pantalla de inicio están exentas</strong> de ese plazo, y
+            RFlowP además pide almacenamiento persistente al arrancar. Pero es una razón más
+            para insistir en que la instalen de verdad y no la usen como pestaña suelta.
+         </p>
+      </div>
+   </section>
+
+   <section>
+      <h2>Las dos vías nativas, y por qué probablemente no las necesitas</h2>
+
+      <h3>Android en Google Play</h3>
+      <p>
+         Se puede empaquetar la PWA como aplicación de Play Store con
+         <a href="https://github.com/GoogleChromeLabs/bubblewrap">Bubblewrap</a>. Necesitas:
+         cuenta de desarrollador (25 USD una sola vez), generar y <strong>custodiar un
+         keystore</strong> —si lo pierdes no puedes volver a actualizar la app nunca—, publicar
+         un archivo de verificación en tu dominio, y pasar la revisión de Google.
+      </p>
+      <p>
+         <strong>Para un curso no compensa.</strong> «Agregar a inicio» deja exactamente el
+         mismo icono en la pantalla del alumno, sin trámites y con actualizaciones inmediatas.
+         Solo tiene sentido si la institución exige que esté en la tienda.
+      </p>
+
+      <h3>iPhone en la App Store</h3>
+      <p>
+         No hay atajo: exige 99 USD al año, un contenedor nativo y pasar revisión, que además
+         históricamente rechaza aplicaciones que son solo un envoltorio de una web.
+         <strong>No es una vía realista para un curso.</strong>
+      </p>
+
+      <h3>Programa de escritorio con Tauri</h3>
+      <p>
+         Es la única de las tres que aporta algo de verdad: una build de escritorio permite
+         desactivar las herramientas de desarrollo, que es la forma barata de subir la barrera
+         anti-copia. Requiere instalar Rust y añadir la carpeta <code>src-tauri/</code>, que
+         <strong>hoy no está en el proyecto</strong>: es un camino documentado, no algo que
+         funcione ahora mismo.
+      </p>
+
+      <div class="caja grave">
+         <h3>Si algún día haces la build de escritorio, avísales antes</h3>
+         <p>
+            El programa de escritorio y la versión web son <strong>orígenes distintos</strong>:
+            un alumno que use las dos tendría dos identidades separadas, con llaves distintas, y
+            lo guardado en una no se abre en la otra. Hay que elegir una de las dos para todo el
+            grupo, no ofrecer ambas.
+         </p>
+      </div>
+   </section>
+
+   <section>
+      <h2>Actualizar la app durante el curso</h2>
+      <p>
+         Publica la nueva versión y ya está: la app se actualiza sola la próxima vez que el
+         alumno la abra con conexión. No tienen que reinstalar nada ni pierden sus archivos,
+         porque la dirección no cambió.
+      </p>
+      <div class="caja">
+         <h3>Lo único que sí rompe compatibilidad</h3>
+         <p>
+            Cambiar el formato de los archivos <code>.algx</code>. Si en algún momento subes la
+            versión del formato, las entregas viejas dejarán de abrirse con un mensaje claro,
+            pero dejarán de abrirse. Recoge y califica lo pendiente antes de un cambio así.
+         </p>
+      </div>
+   </section>
+
+   <section>
+      <h2>Antes de repartir la dirección</h2>
+      <ul class="verificacion">
+         <li>La dirección abre con <strong>candado</strong> (https) y es la definitiva.</li>
+         <li>
+            El navegador ofrece instalarla: si no aparece la opción, revisa
+            <code>start_url</code> y <code>scope</code> en el manifiesto.
+         </li>
+         <li>
+            La probaste <strong>en un Android y en un iPhone reales</strong>, instalada desde la
+            pantalla de inicio, no solo en la computadora.
+         </li>
+         <li>Con el aparato en modo avión, la app abre y deja trabajar.</li>
+         <li>Creaste la llave del curso y la privada está respaldada en dos lugares.</li>
+         <li>Tienes listo el archivo de llave pública para repartir el primer día.</li>
+         <li>Imprimiste el instructivo del alumno con la dirección escrita en él.</li>
+      </ul>
+   </section>
+
+   <footer>
+      Este manual acompaña a los instructivos de una página de
+      <code>docs/</code>. Para lo que la app protege y lo que no, mira la sección
+      correspondiente del <code>README.md</code> del proyecto: conviene leerla antes de
+      apoyarse en ella para calificar.
+   </footer>
+</div>
