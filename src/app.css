@@ -1,0 +1,102 @@
+/**
+ * Paleta y reglas globales.
+ *
+ * Los colores de los símbolos heredan la paleta ANSI de PseudoFlow (BSD-3),
+ * ajustada para que el texto encima cumpla contraste AA en ambos temas.
+ */
+
+:root {
+   color-scheme: light dark;
+
+   --fuente-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo,
+      Consolas, monospace;
+
+   /* Tema claro */
+   --fondo: #f6f7f9;
+   --superficie: #ffffff;
+   --superficie-alta: #eceef2;
+   --lienzo: #f0f2f5;
+   --borde: #d9dde4;
+   --texto: #1a1d23;
+   --texto-tenue: #5b6270;
+   --texto-debil: #8b93a1;
+   --acento: #00c07a;
+   --activo: #ff9500;
+   --error: #d63b3b;
+
+   --aviso-fondo: #fff6e0;
+   --aviso-texto: #7a5300;
+   --aviso-borde: #f0d08a;
+
+   /* Símbolos del diagrama */
+   --c-terminador: #c9cfda;
+   --c-proceso: #8ce8bf;
+   --c-datos: #9ad2ff;
+   --c-decision: #ffdf8a;
+   --c-preparacion: #d9bdf5;
+   --borde-simbolo: #4d5166;
+   --texto-simbolo: #16191f;
+   --linea: #6b7180;
+}
+
+@media (prefers-color-scheme: dark) {
+   :root {
+      --fondo: #14161a;
+      --superficie: #1c1f25;
+      --superficie-alta: #2a2e37;
+      --lienzo: #101216;
+      --borde: #2f343d;
+      --texto: #e6e9ee;
+      --texto-tenue: #9aa2b1;
+      --texto-debil: #6b7280;
+      --acento: #00d98a;
+      --activo: #ffa726;
+      --error: #ff6b6b;
+
+      --aviso-fondo: #2e2409;
+      --aviso-texto: #ffd77a;
+      --aviso-borde: #5c4712;
+
+      --c-terminador: #4d5166;
+      --c-proceso: #00b578;
+      --c-datos: #2b8fd6;
+      --c-decision: #c99a1f;
+      --c-preparacion: #7d5bab;
+      --borde-simbolo: #0d0f13;
+      --texto-simbolo: #080b0e;
+      --linea: #7d8595;
+   }
+}
+
+* {
+   box-sizing: border-box;
+}
+
+html,
+body {
+   margin: 0;
+   padding: 0;
+   height: 100%;
+   overscroll-behavior: none;
+}
+
+body {
+   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+   background: var(--fondo);
+   color: var(--texto);
+   -webkit-text-size-adjust: 100%;
+}
+
+#app {
+   height: 100%;
+}
+
+button {
+   font-family: inherit;
+}
+
+/* Foco visible y consistente: hace falta para la navegación con teclado. */
+:focus-visible {
+   outline: 2px solid var(--acento);
+   outline-offset: 2px;
+}

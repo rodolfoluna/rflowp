@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+   <head>
+      <meta charset="UTF-8" />
+      <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+      <!--
+         `viewport-fit=cover` + `user-scalable=no`: la app maneja su propio zoom
+         en el diagrama; el zoom del navegador encima descoloca los controles.
+      -->
+      <meta
+         name="viewport"
+         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+      />
+      <meta name="theme-color" content="#14161a" />
+      <meta
+         name="description"
+         content="Diseña algoritmos en pseudocódigo o en diagrama de flujo, ejecútalos y guárdalos."
+      />
+
+      <!-- iOS solo instala desde Safari y necesita estas etiquetas propias. -->
+      <meta name="apple-mobile-web-app-capable" content="yes" />
+      <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+      <meta name="apple-mobile-web-app-title" content="RFlowP" />
+      <link rel="apple-touch-icon" href="/icono-192.png" />
+
+      <title>RFlowP — Diseño de algoritmos</title>
+   </head>
+   <body>
+      <div id="app"></div>
+      <script type="module" src="/src/main.ts"></script>
+   </body>
+</html>
