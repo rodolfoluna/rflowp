@@ -31,12 +31,23 @@ Conviene que el profesor lo entienda con precisión antes de apoyarse en ello.
   propio archivo y no hay ninguna autoridad que ate un número de control a una
   llave. Quien entienda el formato puede fabricar un archivo con el nombre que
   quiera. Es tamper-evidence y trazabilidad, no autenticación.
-- El bloqueo de copiar/pegar (fase 6) es fricción, no una barrera.
+- El bloqueo de copiar/pegar es **fricción, no una barrera**: quien sepa abrir
+  las herramientas del navegador lo desactiva en un minuto.
 
-**Dónde está el valor real contra la copia:** en la *trazabilidad*. Cada archivo
-lleva la huella de la llave de firma de la instalación que lo creó. Dos entregas
-con la misma huella y distinto nombre salieron del mismo dispositivo. Eso es lo
-que delata una copia, y es difícil de esquivar sin entender el formato.
+**Dónde está el valor real contra la copia:** en la *trazabilidad*, y son dos
+señales distintas.
+
+1. **Misma instalación.** Cada archivo lleva la huella de la llave de firma del
+   dispositivo que lo creó. Dos entregas con la misma huella y distinto nombre
+   salieron del mismo teléfono. Es difícil de esquivar sin entender el formato.
+2. **Mismo algoritmo.** Se compara la *forma* del código ignorando los nombres
+   de las variables, los mensajes, el nombre del proceso, los paréntesis de más
+   y los comentarios — es decir, ignorando todo lo que cambia quien transcribe
+   a mano. Esto atrapa justo lo que el cifrado no puede evitar.
+
+Y una tercera señal, más débil: la **bitácora**. Un trabajo escrito de verdad
+acumula minutos y cientos de ediciones en varias sesiones; uno transcrito de un
+tirón, no.
 
 **Si necesitas subir la barrera**, la build de escritorio con Tauri y las
 herramientas de desarrollo deshabilitadas es la opción barata. La ofuscación del
@@ -54,15 +65,15 @@ bundle tiene rendimientos decrecientes y cuesta accesibilidad.
 | 3 | Edición gráfica bidireccional (puntos `+`, paleta, editor de expresiones) | **Hecho** |
 | 4 | Identidad local, OPFS, guardar/cargar `.algx` | **Hecho** |
 | 5 | Cifrado y modo profesor | **Hecho** |
-| 6 | Anti-copia, bitácora, pulido | Pendiente |
+| 6 | Anti-copia, bitácora y revisión de entregas | **Hecho** |
 
 Ahora mismo la app **edita en las dos direcciones**: se escribe pseudocódigo y
 el diagrama se redibuja, o se arma el diagrama tocando símbolos y el
 pseudocódigo se regenera. Ejecuta, guarda en el dispositivo, y **cifra** lo que
 exporta de modo que solo el alumno y su profesor puedan abrirlo.
 
-Falta la fase 6: bloquear copiar/pegar, llenar la bitácora de edición y el
-panel de lote del profesor con detección automática de duplicados.
+Las seis fases del plan están hechas. Lo que falta antes de usarla en un curso
+es probarla **en teléfonos reales** (ver el final de este documento).
 
 ---
 
@@ -117,6 +128,8 @@ consecuencia del diseño y no un problema de sincronización.
 | `src/edit/` | `mutaciones.ts`, `documento.svelte.ts`, paleta e inspectores |
 | `src/identity/` | Identidad del alumno, bienvenida y borrado de datos |
 | `src/crypto/` | Sobre cifrado, llaves y panel del profesor |
+| `src/guard/` | Guardas del portapapeles y bitácora de edición |
+| `src/teacher/` | Detección de copias y panel de revisión de lote |
 | `src/file/` | Formato `.algx`, almacenes, biblioteca y transferencia |
 | `src/ui/` | Ejemplos, menú y piezas de interfaz |
 | `tests/` | Ciclo de ida y vuelta, intérprete, layout, mutaciones, documento, comentarios |
@@ -264,9 +277,27 @@ entrega y devolvérsela al alumno.
 Si un alumno guarda **antes** de importar la llave, ese archivo solo lo podrá
 abrir él: el profesor no. La app lo avisa en el menú y al exportar.
 
+## Revisar entregas
+
+Con la llave privada cargada aparece **Revisar entregas** en el menú. Importa un
+lote entero de `.algx` de una vez y muestra:
+
+- Los **grupos para revisar**, primero, con el motivo de cada señal.
+- Una tabla con la evidencia de cada trabajo: tiempo activo, sesiones,
+  ediciones, intentos de pegar bloqueados, y si la firma cuadra.
+
+Sobre el tono: la interfaz dice «revisar», nunca «copia». Los umbrales de la
+bitácora son **deliberadamente laxos** — es preferible dejar pasar una copia que
+señalar a quien sí trabajó — y los algoritmos de menos de 6 sentencias no se
+comparan nunca, porque «lee dos números y súmalos» sale igual en todo el grupo.
+
+El tiempo se cuenta solo con la app **visible y con el foco**: si contara con la
+pestaña en segundo plano, dejar la app abierta toda la tarde inflaría la cifra y
+la volvería inútil como evidencia.
+
 ## Pruebas
 
-272 pruebas, sin dependencias del navegador:
+302 pruebas, sin dependencias del navegador:
 
 - **Ida y vuelta**: sobre 16 algoritmos, `parse → print → parse` devuelve el
   mismo árbol, imprimir es idempotente y los ids no se repiten. Es la red de
@@ -295,21 +326,43 @@ abrir él: el profesor no. La app lo avisa en el menú y al exportar.
   datos deja al alumno fuera y al profesor dentro; alterar el ciphertext impide
   abrir y alterar el encabezado invalida la firma; dos entregas de la misma
   instalación comparten huella; y el algoritmo no aparece en claro en el archivo.
+- **Detección de copias**: renombrar variables, cambiar los mensajes, cambiar el
+  nombre del proceso, añadir paréntesis o comentarios **no** disfraza el
+  algoritmo; cambiar un operador o la estructura de control **sí** lo distingue.
+  Y los falsos positivos que importan: no se señala a un alumno que entrega dos
+  versiones de su propio trabajo, ni a dos que coinciden en un ejercicio trivial.
+- **Bitácora**: el cronómetro cuenta con la app activa y no cuenta en segundo
+  plano; el contador de pegados pertenece al documento y no a la sesión.
 
 ---
 
+## Antes de usarla en un curso
+
+Estos pasos no los sustituye ninguna prueba automática:
+
+1. **Probar en un Android y un iPhone reales**, instalando desde la pantalla de
+   inicio, en modo avión, y comprobando que los datos siguen ahí varios días
+   después. OPFS e IndexedDB se comportan distinto en Safari, y el desalojo de
+   datos de iOS solo se ve con el tiempo real pasando.
+2. **Generar la llave del curso y respaldarla en dos lugares.** Si se pierde,
+   ninguna entrega de ese curso se vuelve a abrir.
+3. **Repartir la llave pública el primer día**, antes de que nadie trabaje. Un
+   algoritmo guardado antes de importarla solo lo abre su autor.
+4. **Decir en clase que no hay recuperación por la vía del alumno**: si pierde
+   el teléfono, el profesor es quien puede devolverle su trabajo.
+5. Sustituir los iconos PNG de relleno de `public/`.
+
 ## Pendiente antes de liberar
 
-- Probar en un Android y un iPhone **reales**, instalando desde la pantalla de
-  inicio, en modo avión, y comprobando que los datos sobreviven varios días.
-  Es la comprobación que ninguna prueba automática sustituye: OPFS e IndexedDB
-  se comportan distinto en Safari, y el desalojo de datos de iOS solo se ve con
-  el tiempo real pasando.
-- Sustituir los iconos PNG de relleno de `public/` por los definitivos.
-- Cambiar el `<textarea>` por CodeMirror 6, necesario para bloquear el
-  portapapeles dentro del editor (fase 6). Al hacerlo hay que comprobar que
-  escribir el texto desde el código **no** dispara su `oninput`: de eso depende
-  que las dos vías de edición no se muerdan la cola.
+- El bloqueo del portapapeles también estorba a quien lo usa por necesidad
+  (lectores de pantalla, teclados alternativos, dificultades motrices). Si algún
+  alumno lo necesita, hay que poder desactivarlo para él; hoy no hay forma.
+- Migrar el `<textarea>` a CodeMirror 6 si se quiere resaltado de sintaxis y
+  marcas de error en el margen. **No hace falta para bloquear el portapapeles**,
+  como se dijo antes por error: el evento `paste` de un `<textarea>` es
+  cancelable y eso es todo lo que se necesita. Si se migra, hay que comprobar
+  que escribir el texto desde el código **no** dispara su `oninput`: de eso
+  depende que las dos vías de edición no se muerdan la cola.
 - El inspector edita el primer valor de un `Escribir` con varias partes; el
   resto se editan desde el pseudocódigo. Falta la edición de la lista completa.
 - El panel de lote del profesor todavía no marca los duplicados

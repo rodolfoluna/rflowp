@@ -34,6 +34,9 @@
    import { nombreSugerido } from './file/algx';
    import { descargar } from './file/transferencia';
    import PanelProfesor from './crypto/PanelProfesor.svelte';
+   import PanelLote from './teacher/PanelLote.svelte';
+   import { Guardas } from './guard/guardas.svelte';
+   import { Cronista } from './guard/bitacora.svelte';
    import {
       almacenLlavesIndexedDB,
       almacenProfesorIndexedDB,
@@ -81,9 +84,13 @@
    let archivoAbiertoId = $state<string | undefined>(undefined);
    let tituloActual = $state('Sin título');
 
+   const guardas = new Guardas();
+   const cronista = new Cronista();
+
    let menuAbierto = $state(false);
    let panelArchivos = $state(false);
    let panelProfesor = $state(false);
+   let panelLote = $state(false);
    let borrandoDatos = $state(false);
    /** Cuando no es null, se está pidiendo un título para guardar. */
    let pidiendoTitulo = $state<{ como: boolean } | null>(null);
@@ -115,6 +122,10 @@
    const editable = $derived(!ejecutando && doc.errores.length === 0);
 
    // -- Arranque ------------------------------------------------------------
+
+   // Las guardas y el cronómetro viven mientras viva la app.
+   $effect(() => guardas.activar());
+   $effect(() => cronista.arrancar());
 
    onMount(async () => {
       sinAlmacenamiento = !hayOPFS();
@@ -235,6 +246,7 @@
             titulo: titulo ?? tituloActual,
             identidad,
             id: titulo ? undefined : archivoAbiertoId,
+            bitacora: cronista.instantanea(guardas.pegadosBloqueados),
          });
          archivoAbiertoId = id;
          if (titulo) tituloActual = titulo;
@@ -254,6 +266,11 @@
          tituloActual = archivo.encabezado.titulo;
          nodoSeleccionado = undefined;
          panelArchivos = false;
+
+         // Se continúa la bitácora del archivo: abrirlo para seguir trabajando
+         // cuenta como una sesión más, y el tiempo acumulado no se pierde.
+         cronista.continuar(archivo.contenido.bitacora);
+         guardas.fijarDesdeArchivo(archivo.contenido.bitacora.pegadosBloqueados);
 
          if (archivo.como === 'profesor' && !archivo.firmaValida) {
             // Lo más importante que puede saber un profesor al abrir una
@@ -275,6 +292,8 @@
       tituloActual = 'Sin título';
       nodoSeleccionado = undefined;
       menuAbierto = false;
+      cronista.reiniciar();
+      guardas.reiniciar();
       anunciar('Algoritmo nuevo');
    }
 
@@ -284,6 +303,8 @@
       doc.cargar(EJEMPLO_INICIAL);
       archivoAbiertoId = undefined;
       tituloActual = 'Sin título';
+      cronista.reiniciar();
+      guardas.reiniciar();
    }
 
    /**
@@ -300,6 +321,7 @@
             programa: doc.programa,
             titulo: tituloActual,
             identidad,
+            bitacora: cronista.instantanea(guardas.pegadosBloqueados),
          });
          const nombre = nombreSugerido(encabezado);
          descargar(nombre, texto);
@@ -336,7 +358,7 @@
    // -- Edición gráfica -----------------------------------------------------
 
    function aplicar(mutacion: (p: Program) => Program) {
-      doc.aplicar(mutacion);
+      if (doc.aplicar(mutacion)) cronista.anotarEdicion();
    }
 
    function abrirPaleta(punto: InsertPoint) {
@@ -353,7 +375,7 @@
       if (!posicion) return;
 
       const sentencia = crearSentencia(tipo);
-      doc.aplicar((p) => insertar(p, posicion, sentencia));
+      if (doc.aplicar((p) => insertar(p, posicion, sentencia))) cronista.anotarEdicion();
       // Seleccionar lo recién puesto: el alumno casi siempre quiere editarlo ya.
       nodoSeleccionado = sentencia.id;
    }
@@ -572,7 +594,10 @@
             <textarea
                id="editor"
                value={doc.texto}
-               oninput={(e) => doc.escribir(e.currentTarget.value)}
+               oninput={(e) => {
+                  doc.escribir(e.currentTarget.value);
+                  cronista.anotarEdicion();
+               }}
                spellcheck="false"
                autocapitalize="off"
                aria-label="Editor de pseudocódigo"
@@ -686,6 +711,11 @@
             menuAbierto = false;
             panelProfesor = true;
          }}
+         modoProfesor={modoProfesor}
+         onRevisarLote={() => {
+            menuAbierto = false;
+            panelLote = true;
+         }}
          llaveCurso={configProfesor
             ? `${configProfesor.etiqueta}${modoProfesor ? ' · modo profesor' : ''}`
             : null}
@@ -723,6 +753,17 @@
       />
    {/if}
 
+   {#if panelLote}
+      <PanelLote
+         {biblioteca}
+         onAbrir={(id) => {
+            panelLote = false;
+            void abrirArchivo(id);
+         }}
+         onCerrar={() => (panelLote = false)}
+      />
+   {/if}
+
    {#if panelProfesor}
       <PanelProfesor
          config={configProfesor}
@@ -748,7 +789,9 @@
       />
    {/if}
 
-   {#if aviso}
+   {#if guardas.aviso}
+      <div class="aviso-flotante guarda" role="status">{guardas.aviso}</div>
+   {:else if aviso}
       <div class="aviso-flotante" role="status">{aviso}</div>
    {/if}
 
@@ -1142,6 +1185,11 @@
       text-align: center;
       box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
       pointer-events: none;
+   }
+   .aviso-flotante.guarda {
+      background: var(--aviso-fondo);
+      color: var(--aviso-texto);
+      border-color: var(--aviso-borde);
    }
    .aviso-flotante.persistente {
       bottom: auto;

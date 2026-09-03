@@ -22,6 +22,9 @@
       /** Curso configurado, para mostrarlo de un vistazo. `null` si no hay. */
       llaveCurso: string | null;
       onLlaveCurso: () => void;
+      /** Con la llave privada cargada aparece la revisión de entregas. */
+      modoProfesor: boolean;
+      onRevisarLote: () => void;
       onBorrarDatos: () => void;
       onCerrar: () => void;
    }
@@ -37,6 +40,8 @@
       onExportar,
       llaveCurso,
       onLlaveCurso,
+      modoProfesor,
+      onRevisarLote,
       onBorrarDatos,
       onCerrar,
    }: Props = $props();
@@ -124,6 +129,16 @@
             </small>
          </span>
       </button>
+
+      {#if modoProfesor}
+         <button onclick={onRevisarLote}>
+            <span class="icono" aria-hidden="true">🔍</span>
+            <span class="texto">
+               <strong>Revisar entregas</strong>
+               <small>Importar un lote y ver la evidencia de cada trabajo</small>
+            </span>
+         </button>
+      {/if}
    </div>
 
    <div class="grupo peligroso">

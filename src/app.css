@@ -95,6 +95,39 @@ button {
    font-family: inherit;
 }
 
+/*
+ * Selección de texto restringida.
+ *
+ * Se bloquea en toda la interfaz salvo donde hace falta para editar: dentro de
+ * un campo hay que poder seleccionar para corregir. Como el evento `copy` se
+ * cancela por separado (ver `guard/guardas.svelte.ts`), poder seleccionar
+ * dentro del editor no permite sacar el texto.
+ *
+ * Es fricción, no una barrera: quien sepa abrir las herramientas del navegador
+ * lo desactiva en un minuto. El valor está en que cada intento queda anotado
+ * en la bitácora del archivo.
+ */
+body {
+   -webkit-user-select: none;
+   user-select: none;
+}
+
+input,
+textarea,
+[contenteditable='true'] {
+   -webkit-user-select: text;
+   user-select: text;
+}
+
+/* En iOS, además, hay que desactivar el menú de selección por pulsación larga. */
+body {
+   -webkit-touch-callout: none;
+}
+input,
+textarea {
+   -webkit-touch-callout: default;
+}
+
 /* Foco visible y consistente: hace falta para la navegación con teclado. */
 :focus-visible {
    outline: 2px solid var(--acento);
