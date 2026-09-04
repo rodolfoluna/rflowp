@@ -3,6 +3,10 @@
 App educativa para diseñar algoritmos en **pseudocódigo** o en **diagrama de
 flujo ANSI**, ejecutarlos y guardarlos. Instalable como PWA en Android, iOS y PC.
 
+**▶ [rodolfoluna.github.io/rflowp](https://rodolfoluna.github.io/rflowp/)**
+
+Cada cambio en `main` se publica solo, y no se publica si fallan las pruebas.
+
 Deriva de [PseudoFlow](https://github.com/talamantesvictor/pseudoflow) (BSD-3);
 ver [`NOTICE.md`](NOTICE.md).
 
@@ -113,6 +117,25 @@ RFLOWP_BASE=/rflowp/ npm run build
 El manual completo —dónde alojarla, cómo la instala cada sistema, y por qué las
 tiendas de aplicaciones casi nunca compensan— está en
 [`docs/manual-de-distribucion.html`](docs/manual-de-distribucion.html).
+
+### Servidor para un aula sin internet
+
+```bash
+npm run servidor
+```
+
+Sirve `dist/` por HTTPS a toda la red local. Necesita certificados en `certs/`;
+el script explica al arrancar cómo generarlos, con las IP de la máquina ya
+puestas en el comando.
+
+**El detalle que decide si sirve de algo:** con un certificado autofirmado
+(`npm run certificados`) la app **se ve pero no se puede instalar**, porque el
+service worker no se registra en una página con error de certificado. Para que
+los alumnos la instalen de verdad hace falta [mkcert](https://github.com/FiloSottile/mkcert)
+y añadir su autoridad a cada aparato.
+
+Casi siempre sale más barato que instalen la app una vez desde la dirección
+pública y después el laboratorio esté sin internet todo el semestre.
 
 ---
 

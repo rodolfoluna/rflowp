@@ -126,6 +126,35 @@
       max-width: 62ch;
    }
 
+   /* La dirección es el dato del que depende todo lo demás: se destaca. */
+   .direccion {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      flex-wrap: wrap;
+      border: 2px solid var(--acento);
+      border-radius: 8px;
+      padding: 11px 16px;
+      background: var(--acento-hueco);
+   }
+   .direccion .rotulo {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--acento);
+      white-space: nowrap;
+   }
+   .direccion .url {
+      font-family: var(--mono);
+      font-size: clamp(15px, 3.4vw, 21px);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--tinta);
+      word-break: break-all;
+   }
+
    /* ---- Pasos: la numeración es real, son una secuencia ---- */
    ol.pasos {
       list-style: none;
@@ -303,6 +332,8 @@
       .aviso { border-left-width: 2.5px; padding: 8px 11px; break-inside: avoid; }
       .aviso p { font-size: 9.4pt; }
       ol.pasos > li { break-inside: avoid; }
+      .direccion { border-width: 1.5px; padding: 7px 12px; break-inside: avoid; }
+      .direccion .url { font-size: 15pt; }
    }
 </style>
 
@@ -322,11 +353,16 @@
       tu propio aparato.
    </p>
 
+   <div class="direccion">
+      <span class="rotulo">Abre esta dirección</span>
+      <span class="url">rodolfoluna.github.io/rflowp</span>
+   </div>
+
    <ol class="pasos">
       <li>
          <h2>Instala la app</h2>
          <div class="cuerpo">
-            <p>Abre la dirección que te dio tu profesor y luego:</p>
+            <p>Abre la dirección de arriba en el navegador y luego:</p>
             <dl class="plataformas">
                <dt>Android</dt>
                <dd>Menú <kbd>⋮</kbd> → <em>Instalar aplicación</em></dd>
@@ -445,6 +481,6 @@
    <footer>
       <div class="firma">Profesor: <span></span></div>
       <div class="firma">Materia y grupo: <span></span></div>
-      <div class="firma">Entregas en: <span></span></div>
+      <div class="firma">Entrego mis tareas en: <span></span></div>
    </footer>
 </div>
