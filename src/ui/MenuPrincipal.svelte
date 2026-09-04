@@ -27,6 +27,7 @@
       modoProfesor: boolean;
       onRevisarLote: () => void;
       preferenciaTema: PreferenciaTema;
+      onAcercaDe: () => void;
       onBorrarDatos: () => void;
       onCerrar: () => void;
    }
@@ -45,6 +46,7 @@
       modoProfesor,
       onRevisarLote,
       preferenciaTema,
+      onAcercaDe,
       onBorrarDatos,
       onCerrar,
    }: Props = $props();
@@ -148,6 +150,16 @@
             </span>
          </button>
       {/if}
+   </div>
+
+   <div class="grupo">
+      <button onclick={onAcercaDe}>
+         <span class="icono" aria-hidden="true">ⓘ</span>
+         <span class="texto">
+            <strong>Acerca de</strong>
+            <small>Versión y licencias</small>
+         </span>
+      </button>
    </div>
 
    <div class="tema">

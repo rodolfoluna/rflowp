@@ -26,5 +26,6 @@
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^5.0.0"
   },
-  "description": "App PWA para disenar, ejecutar y guardar algoritmos en pseudocodigo y diagrama de flujo ANSI."
+  "description": "App PWA para disenar, ejecutar y guardar algoritmos en pseudocodigo y diagrama de flujo ANSI.",
+  "license": "UNLICENSED"
 }

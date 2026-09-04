@@ -313,14 +313,14 @@ profesor produce archivos que nadie más podrá abrir.
 Es una llave **pública**: sirve para cifrar hacia el profesor, no para
 descifrar. Estar en el repositorio no la debilita.
 
-> ⚠️ **Si reutilizas este proyecto para tu curso, genera la tuya.**
+> ⚠️ **Cada despliegue necesita su propia llave.**
 >
 > ```bash
-> node scripts/generar-llave-del-curso.mjs "Nombre de tu curso"
+> node scripts/generar-llave-del-curso.mjs "Nombre del curso"
 > ```
 >
-> Si no lo haces, tus alumnos estarían cifrando hacia el dueño de la llave
-> privada de este repositorio, no hacia ti, y no podrías abrir sus entregas.
+> Conservar la llave incluida hace que los alumnos cifren hacia el titular de
+> *su* parte privada. Si no es quien recibe las entregas, no podrá abrirlas.
 
 El script escribe la pública en `src/crypto/` y la privada en
 `llaves-profesor/`, que está en `.gitignore` y **nunca se sube**. La llave que
@@ -445,6 +445,40 @@ Dos avisos del manual que conviene no descubrir tarde:
   depende que las dos vías de edición no se muerdan la cola.
 - El inspector edita el primer valor de un `Escribir` con varias partes; el
   resto se editan desde el pseudocódigo. Falta la edición de la lista completa.
-- El panel de lote del profesor todavía no marca los duplicados
-  automáticamente: la huella ya se calcula y se guarda, pero hay que compararla
-  a ojo. Es lo primero de la fase 6.
+- La comparación de algoritmos es exacta sobre la forma: detecta renombrados y
+  cambios de mensaje, pero no una reescritura parcial. Un alumno que cambie el
+  orden de dos sentencias independientes ya no coincide.
+
+---
+
+## Licencia
+
+**© 2026 Rodolfo Luna. Todos los derechos reservados.** Ver [`LICENSE`](LICENSE).
+
+El código está a la vista para consulta y auditoría, no para reutilización. Que
+el repositorio sea público no lo hace de uso libre: sin licencia expresa, los
+derechos quedan reservados. Para usarlo en otra institución hay que pedir
+permiso, y la respuesta puede perfectamente ser que sí.
+
+Esa reserva cubre solo el código propio. Los componentes de terceros conservan
+sus licencias íntegras y **no** quedan restringidos por ella:
+
+| Componente | Licencia | Dónde |
+|---|---|---|
+| Svelte | MIT | Incluido en la app |
+| Workbox | MIT | Incluido en el service worker |
+| PseudoFlow | BSD 3-Clause | Paleta y símbolos ANSI adaptados |
+
+Las tres exigen que su aviso de copyright acompañe a la distribución, así que
+[`public/AVISOS.txt`](public/AVISOS.txt) viaja con la app compilada y es
+alcanzable desde la pantalla **Acerca de**. Tenerlo solo en el repositorio no
+cumpliría: lo que se distribuye es la aplicación.
+
+Las herramientas de compilación (Vite, TypeScript, lightningcss…) no llegan al
+aparato del usuario y por eso no generan obligaciones de distribución.
+
+**Sobre PSeInt:** RFlowP implementa un dialecto compatible con el suyo para que
+la experiencia previa de los alumnos siga sirviendo, pero **no contiene código
+de PSeInt ni deriva de él**. PSeInt es C++ bajo GPLv2; nada de ese proyecto se
+ha copiado, portado ni enlazado. La compatibilidad se limita a las palabras
+clave del lenguaje, escritas de cero en el analizador.

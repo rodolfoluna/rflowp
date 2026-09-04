@@ -14,12 +14,12 @@
  * El profesor puede sustituirla en cualquier momento generando la suya desde
  * «Llave del curso», y a partir de ahí manda la importada.
  *
- * ⚠️ Si reutilizas este proyecto para TU curso, genera la tuya:
+ * ⚠️ Cada despliegue necesita su propia llave:
  *
- *       node scripts/generar-llave-del-curso.mjs "Nombre de tu curso"
+ *       node scripts/generar-llave-del-curso.mjs "Nombre del curso"
  *
- *    Si no lo haces, tus alumnos estarían cifrando hacia el dueño de la llave
- *    privada de este repositorio, no hacia ti.
+ *    Conservar esta hace que los alumnos cifren hacia el titular de SU parte
+ *    privada. Si no es quien recibe las entregas, no podrá abrirlas.
  */
 
 import type { ArchivoLlaveProfesor } from './llaves';

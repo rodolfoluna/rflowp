@@ -16,10 +16,10 @@
  *
  * ── El riesgo real, que sí hay que entender ─────────────────────────────────
  *
- * Como el repositorio es público, quien lo clone y lo compile obtendrá esta
- * misma llave incluida, y sus alumnos estarían cifrando hacia el dueño de la
- * privada — no hacia él. Cualquiera que reutilice el proyecto para su propio
- * curso debe correr este script y generar la suya.
+ * La llave incluida solo sirve a quien tenga su parte privada. Un despliegue en
+ * otra dirección que la conserve haría que sus alumnos cifren hacia el titular
+ * de ESA privada: las entregas llegarían ilegibles a quien las recibe. Por eso
+ * cada despliegue tiene que correr este script antes de publicar.
  *
  * Uso:
  *    node scripts/generar-llave-del-curso.mjs "Algoritmos 2026"
@@ -108,12 +108,12 @@ const modulo = `/**
  * El profesor puede sustituirla en cualquier momento generando la suya desde
  * «Llave del curso», y a partir de ahí manda la importada.
  *
- * ⚠️ Si reutilizas este proyecto para TU curso, genera la tuya:
+ * ⚠️ Cada despliegue necesita su propia llave:
  *
- *       node scripts/generar-llave-del-curso.mjs "Nombre de tu curso"
+ *       node scripts/generar-llave-del-curso.mjs "Nombre del curso"
  *
- *    Si no lo haces, tus alumnos estarían cifrando hacia el dueño de la llave
- *    privada de este repositorio, no hacia ti.
+ *    Conservar esta hace que los alumnos cifren hacia el titular de SU parte
+ *    privada. Si no es quien recibe las entregas, no podrá abrirlas.
  */
 
 import type { ArchivoLlaveProfesor } from './llaves';

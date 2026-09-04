@@ -15,6 +15,7 @@
    import PanelArchivos from './file/PanelArchivos.svelte';
    import MenuPrincipal from './ui/MenuPrincipal.svelte';
    import PedirTexto from './ui/PedirTexto.svelte';
+   import AcercaDe from './ui/AcercaDe.svelte';
    import { layout, type InsertPoint } from './chart/layout';
    import { run, type Effect, RuntimeError } from './core/interpreter';
    import type { ParseError } from './core/parser';
@@ -104,6 +105,7 @@
    let panelArchivos = $state(false);
    let panelProfesor = $state(false);
    let panelLote = $state(false);
+   let acercaDe = $state(false);
    let borrandoDatos = $state(false);
    /** Cuando no es null, se está pidiendo un título para guardar. */
    let pidiendoTitulo = $state<{ como: boolean } | null>(null);
@@ -749,6 +751,10 @@
             panelLote = true;
          }}
          {preferenciaTema}
+         onAcercaDe={() => {
+            menuAbierto = false;
+            acercaDe = true;
+         }}
          llaveCurso={configProfesor
             ? `${configProfesor.etiqueta}${
                  modoProfesor
@@ -790,6 +796,10 @@
          }}
          onCancelar={() => (pidiendoTitulo = null)}
       />
+   {/if}
+
+   {#if acercaDe}
+      <AcercaDe onCerrar={() => (acercaDe = false)} />
    {/if}
 
    {#if panelLote}

@@ -281,12 +281,12 @@
    }
 
    .ficha.var {
-      background: color-mix(in srgb, var(--c-datos) 30%, var(--superficie-alta));
-      border-color: var(--c-datos);
+      background: color-mix(in srgb, var(--c-entrada) 30%, var(--superficie-alta));
+      border-color: var(--c-entrada);
    }
    .ficha.arr {
-      background: color-mix(in srgb, var(--c-preparacion) 30%, var(--superficie-alta));
-      border-color: var(--c-preparacion);
+      background: color-mix(in srgb, var(--c-para) 30%, var(--superficie-alta));
+      border-color: var(--c-para);
    }
 
    .aceptar {

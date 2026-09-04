@@ -20,6 +20,7 @@ import {
    type Statement,
    type SwitchCase,
 } from '../core/ast';
+import type { RolSimbolo } from '../chart/layout';
 
 /** Posición dentro del árbol donde cabe una sentencia. */
 export interface Posicion {
@@ -330,6 +331,8 @@ export interface OpcionPaleta {
    descripcion: string;
    /** Forma del símbolo con el que se dibuja, para el icono de la paleta. */
    simbolo: 'process' | 'io' | 'decision' | 'preparation';
+   /** Función, que decide el color. Debe coincidir con la del diagrama. */
+   rol: RolSimbolo;
 }
 
 export const PALETA: readonly OpcionPaleta[] = [
@@ -338,60 +341,70 @@ export const PALETA: readonly OpcionPaleta[] = [
       etiqueta: 'Asignar',
       descripcion: 'Guarda un valor en una variable',
       simbolo: 'process',
+      rol: 'asignacion',
    },
    {
       tipo: 'leer',
       etiqueta: 'Leer',
       descripcion: 'Pide un dato al usuario',
       simbolo: 'io',
+      rol: 'entrada',
    },
    {
       tipo: 'escribir',
       etiqueta: 'Escribir',
       descripcion: 'Muestra un mensaje o un valor',
       simbolo: 'io',
+      rol: 'salida',
    },
    {
       tipo: 'definir',
       etiqueta: 'Definir',
       descripcion: 'Declara una variable y su tipo',
       simbolo: 'process',
+      rol: 'declaracion',
    },
    {
       tipo: 'dimension',
       etiqueta: 'Dimensionar',
       descripcion: 'Crea un arreglo',
       simbolo: 'process',
+      rol: 'declaracion',
    },
    {
       tipo: 'si',
       etiqueta: 'Si…Entonces',
       descripcion: 'Elige entre dos caminos',
       simbolo: 'decision',
+      rol: 'condicion',
    },
    {
       tipo: 'mientras',
       etiqueta: 'Mientras',
       descripcion: 'Repite mientras se cumpla una condición',
       simbolo: 'decision',
+      rol: 'ciclo',
    },
    {
       tipo: 'para',
       etiqueta: 'Para',
       descripcion: 'Repite un número conocido de veces',
       simbolo: 'preparation',
+      rol: 'para',
    },
    {
       tipo: 'repetir',
       etiqueta: 'Repetir',
       descripcion: 'Repite hasta que se cumpla una condición',
       simbolo: 'decision',
+      rol: 'ciclo',
    },
    {
       tipo: 'segun',
       etiqueta: 'Según',
       descripcion: 'Elige entre varios casos',
       simbolo: 'decision',
+      rol: 'caso',
    },
 ];
 

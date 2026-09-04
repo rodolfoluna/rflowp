@@ -53,19 +53,46 @@ export const METRICS = {
 export type ShapeKind =
    /** Óvalo de Inicio / Fin. */
    | 'terminator'
-   /** Rectángulo: asignación. */
+   /** Rectángulo: asignación y declaraciones. */
    | 'process'
    /** Paralelogramo: Leer / Escribir. */
    | 'io'
-   /** Rombo: condición. */
+   /** Rombo: condición, condición de ciclo y casos. */
    | 'decision'
    /** Hexágono: preparación del Para. */
    | 'preparation';
 
+/**
+ * Qué hace el símbolo, más allá de su forma.
+ *
+ * La notación ANSI reutiliza la misma figura para funciones distintas: el
+ * paralelogramo es igual para `Leer` que para `Escribir`, y el rombo sirve
+ * lo mismo para un `Si` que para la condición de un ciclo. El estándar es así y
+ * no se toca, pero un alumno que empieza necesita distinguirlos de un vistazo.
+ *
+ * Por eso el color va por rol y la forma por `kind`: se respeta la notación y se
+ * añade una pista. El color nunca es la única señal — el texto dentro del
+ * símbolo ya dice «Leer» o «Escribir» —, así que quien no distinga colores no
+ * pierde información.
+ */
+export type RolSimbolo =
+   | 'inicio-fin'
+   | 'asignacion'
+   | 'declaracion'
+   | 'entrada'
+   | 'salida'
+   | 'condicion'
+   | 'ciclo'
+   | 'caso'
+   | 'para';
+
 export interface Shape {
    /** Id del nodo del AST. `undefined` en los símbolos de Inicio y Fin. */
    nodeId?: NodeId;
+   /** La figura, según la notación ANSI. */
    kind: ShapeKind;
+   /** La función, que decide el color. */
+   rol: RolSimbolo;
    label: string;
    /** Esquina superior izquierda, en coordenadas absolutas del lienzo. */
    x: number;
@@ -212,6 +239,7 @@ export function layout(program: Program): Diagram {
 
    result.shapes.push({
       kind: 'terminator',
+      rol: 'inicio-fin',
       label: 'Inicio',
       x: spine - halfTerm,
       y,
@@ -232,6 +260,7 @@ export function layout(program: Program): Diagram {
 
    result.shapes.push({
       kind: 'terminator',
+      rol: 'inicio-fin',
       label: 'Fin',
       x: spine - halfTerm,
       y,
@@ -334,12 +363,22 @@ function layoutSimple(stmt: Statement): Frame {
    const kind: ShapeKind =
       stmt.kind === 'ReadStatement' || stmt.kind === 'WriteStatement' ? 'io' : 'process';
 
+   const rol: RolSimbolo =
+      stmt.kind === 'ReadStatement'
+         ? 'entrada'
+         : stmt.kind === 'WriteStatement'
+           ? 'salida'
+           : stmt.kind === 'AssignStatement'
+             ? 'asignacion'
+             : 'declaracion';
+
    const frame = emptyFrame(symbolWidth / 2);
    frame.width = symbolWidth;
    frame.height = symbolHeight;
    frame.shapes.push({
       nodeId: stmt.id,
       kind,
+      rol,
       label: labelFor(stmt),
       x: 0,
       y: 0,
@@ -388,6 +427,7 @@ function layoutIf(stmt: Statement & { kind: 'IfStatement' }): Frame {
    frame.shapes.push({
       nodeId: stmt.id,
       kind: 'decision',
+      rol: 'condicion',
       label: labelFor(stmt),
       x: centerX - decisionWidth / 2,
       y: 0,
@@ -457,18 +497,19 @@ function layoutIf(stmt: Statement & { kind: 'IfStatement' }): Frame {
  * La flecha de retorno sube por la izquierda, en el `loopMargin`.
  */
 function layoutWhile(stmt: Statement & { kind: 'WhileStatement' }): Frame {
-   return layoutPreTestLoop(stmt.id, labelFor(stmt), 'decision', stmt.body, 'body');
+   return layoutPreTestLoop(stmt.id, labelFor(stmt), 'decision', 'ciclo', stmt.body, 'body');
 }
 
 /** Para: mismo esquema que Mientras, pero con el símbolo de preparación. */
 function layoutFor(stmt: Statement & { kind: 'ForStatement' }): Frame {
-   return layoutPreTestLoop(stmt.id, labelFor(stmt), 'preparation', stmt.body, 'body');
+   return layoutPreTestLoop(stmt.id, labelFor(stmt), 'preparation', 'para', stmt.body, 'body');
 }
 
 function layoutPreTestLoop(
    nodeId: NodeId,
    label: string,
    kind: ShapeKind,
+   rol: RolSimbolo,
    body: Statement[],
    blockKey: string,
 ): Frame {
@@ -495,6 +536,7 @@ function layoutPreTestLoop(
    frame.shapes.push({
       nodeId,
       kind,
+      rol,
       label,
       x: spineX - decisionWidth / 2,
       y: 0,
@@ -573,6 +615,7 @@ function layoutRepeat(stmt: Statement & { kind: 'RepeatStatement' }): Frame {
    frame.shapes.push({
       nodeId: stmt.id,
       kind: 'decision',
+      rol: 'ciclo',
       label: labelFor(stmt),
       x: spineX - decisionWidth / 2,
       y: testTop,
@@ -634,6 +677,7 @@ function layoutSwitch(stmt: Statement & { kind: 'SwitchStatement' }): Frame {
       frame.shapes.push({
          nodeId: c.id,
          kind: 'decision',
+         rol: 'caso',
          label: `${labelFor(stmt)} = ${caseLabel(c.tests)}`,
          x: diamondX,
          y: cursorY,

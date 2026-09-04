@@ -1,0 +1,57 @@
+RFlowP — Diseño de algoritmos
+Copyright (c) 2026 Rodolfo Luna. Todos los derechos reservados.
+
+
+CONDICIONES DE USO
+------------------
+
+Este software se publica con el código a la vista únicamente para consulta y
+transparencia. No se concede ninguna licencia de uso, copia, modificación,
+distribución ni obra derivada.
+
+Que el repositorio sea público no significa que sea de uso libre: sin una
+licencia expresa, la legislación de derechos de autor reserva todos los
+derechos al titular.
+
+Si quieres usar RFlowP en tu institución, o partir de él para otro proyecto,
+escribe al titular para acordar los términos. La respuesta puede perfectamente
+ser que sí; lo que no puede es darse por supuesta.
+
+
+LO QUE SÍ PUEDES HACER SIN PERMISO
+----------------------------------
+
+  · Usar la aplicación publicada tal como está, desde su dirección web.
+  · Leer el código para aprender de él o para auditar lo que hace con tus datos.
+  · Citarlo y enlazarlo.
+
+Lo que requiere permiso es copiarlo, alojarlo por tu cuenta, modificarlo o
+distribuirlo.
+
+
+COMPONENTES DE TERCEROS
+-----------------------
+
+Esta reserva de derechos cubre el código propio de RFlowP. La aplicación
+incorpora además componentes de terceros con sus propias licencias, que se
+conservan íntegras y que NO quedan restringidas por este aviso.
+
+El detalle está en AVISOS.txt, que también se distribuye con la aplicación
+compilada y es accesible desde la pantalla «Acerca de».
+
+En resumen: Svelte y Workbox (MIT), y material adaptado de PseudoFlow
+(BSD 3-Clause). Sus licencias permiten expresamente su uso dentro de un
+producto de código cerrado siempre que se conserve el aviso de copyright, que es
+justo lo que hace AVISOS.txt.
+
+
+SIN GARANTÍA
+------------
+
+El software se ofrece «tal cual», sin garantía de ningún tipo. El titular no
+responde por pérdida de datos ni por ningún daño derivado de su uso.
+
+Esto importa de verdad en esta aplicación: si un alumno borra sus datos o pierde
+su dispositivo, sus archivos pueden volverse ilegibles de forma irreversible, y
+si el profesor pierde su llave privada, ninguna entrega de ese curso se podrá
+volver a abrir. La documentación lo advierte en cada punto donde ocurre.

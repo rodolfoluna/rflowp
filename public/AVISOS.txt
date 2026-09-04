@@ -1,0 +1,158 @@
+AVISOS DE TERCEROS — RFlowP
+===========================
+
+RFlowP incorpora componentes de terceros. Este archivo reproduce sus avisos de
+copyright y sus licencias, como exigen esas licencias.
+
+Se distribuye junto con la aplicación compilada y es accesible desde la pantalla
+«Acerca de». El código propio de RFlowP se rige por LICENSE, que es otra cosa y
+no afecta a nada de lo que sigue.
+
+
+ÍNDICE
+------
+
+  1. Svelte .................. MIT ............ incluido en la aplicación
+  2. Workbox ................. MIT ............ incluido en el service worker
+  3. PseudoFlow .............. BSD 3-Clause ... material adaptado
+  4. Herramientas de compilación .............. no se distribuyen
+  5. Tipografías de la documentación .......... no se distribuyen
+
+
+================================================================================
+1. SVELTE
+================================================================================
+
+El motor de interfaz de RFlowP. Su código de ejecución forma parte de la
+aplicación que se descarga.
+
+Proyecto: https://svelte.dev
+Licencia: MIT
+
+Copyright (c) 2016-2025 [Svelte Contributors](https://github.com/sveltejs/svelte/graphs/contributors)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+================================================================================
+2. WORKBOX
+================================================================================
+
+Genera el service worker que permite que la aplicación funcione sin conexión.
+Su código de ejecución forma parte del archivo sw.js que se descarga.
+
+Proyecto: https://developer.chrome.com/docs/workbox
+Licencia: MIT
+
+Copyright 2018 Google LLC
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+
+================================================================================
+3. PSEUDOFLOW
+================================================================================
+
+RFlowP partió de PseudoFlow, de Victor Talamantes. No se reutilizó su código
+fuente: el núcleo de RFlowP (analizador, intérprete, disposición del diagrama y
+renderizado) está escrito de cero y sobre una arquitectura distinta.
+
+Lo que sí se tomó, y por lo que se conserva este aviso:
+
+  · la paleta y las proporciones de los símbolos ANSI;
+  · el planteamiento general de la interfaz de dos vistas sincronizadas.
+
+Proyecto: https://github.com/talamantesvictor/pseudoflow
+Licencia: BSD 3-Clause
+
+BSD 3-Clause License
+
+Copyright (c) 2022-2026, Victor Talamantes
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+================================================================================
+4. HERRAMIENTAS DE COMPILACIÓN
+================================================================================
+
+Vite, TypeScript, Vitest, Sass, lightningcss, caniuse-lite y el resto de
+dependencias de desarrollo se usan para construir la aplicación pero NO se
+distribuyen con ella: ninguna de sus líneas llega al aparato del usuario.
+
+Se mencionan por transparencia. Sus licencias son MIT, Apache-2.0, ISC, BSD,
+BlueOak-1.0.0, MPL-2.0 y CC-BY-4.0 según el paquete, y se conservan íntegras
+dentro de node_modules en el entorno de desarrollo.
+
+En particular, la obligación de MPL-2.0 (lightningcss) alcanza a la
+distribución de los archivos cubiertos por esa licencia, que aquí no se
+distribuyen ni se han modificado.
+
+
+================================================================================
+5. TIPOGRAFÍAS DE LA DOCUMENTACIÓN
+================================================================================
+
+Los instructivos de docs/ usan Bricolage Grotesque, Public Sans e IBM Plex Mono,
+servidas por Google Fonts bajo la SIL Open Font License 1.1. No se redistribuyen
+con este proyecto: se cargan desde el servidor de Google al abrir el documento.
+
+La aplicación en sí no usa ninguna tipografía externa; emplea las del sistema.
+
+
+================================================================================
+
+PSeInt
+------
+
+RFlowP implementa un dialecto de pseudocódigo compatible con el de PSeInt para
+que la experiencia previa de los alumnos siga sirviendo, pero NO contiene código
+de PSeInt ni deriva de él. PSeInt está escrito en C++ y se distribuye bajo
+GPLv2; ninguna parte de ese proyecto se ha copiado, portado ni enlazado aquí.
+
+La compatibilidad se limita a las palabras clave y la sintaxis del lenguaje,
+escritas desde cero en el analizador de RFlowP.

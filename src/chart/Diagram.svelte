@@ -291,7 +291,7 @@
             -->
             <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
             <g
-               class="simbolo {s.kind}"
+               class="simbolo {s.kind} rol-{s.rol}"
                class:activo
                class:seleccionado
                class:clickable={s.nodeId !== undefined}
@@ -429,22 +429,20 @@
       font-family: var(--fuente-mono);
    }
 
-   /* Colores por tipo de símbolo. Heredan la paleta ANSI de PseudoFlow. */
-   .terminator rect {
-      fill: var(--c-terminador);
-   }
-   .process rect {
-      fill: var(--c-proceso);
-   }
-   .io path {
-      fill: var(--c-datos);
-   }
-   .decision path {
-      fill: var(--c-decision);
-   }
-   .preparation path {
-      fill: var(--c-preparacion);
-   }
+   /*
+    * El color va por FUNCIÓN, no por forma: la notación ANSI usa la misma figura
+    * para `Leer` y para `Escribir`, y para un `Si` y la condición de un ciclo.
+    * La forma respeta el estándar; el color desempata.
+    */
+   .rol-inicio-fin rect { fill: var(--c-inicio-fin); }
+   .rol-asignacion rect { fill: var(--c-asignacion); }
+   .rol-declaracion rect { fill: var(--c-declaracion); }
+   .rol-entrada path { fill: var(--c-entrada); }
+   .rol-salida path { fill: var(--c-salida); }
+   .rol-condicion path { fill: var(--c-condicion); }
+   .rol-ciclo path { fill: var(--c-ciclo); }
+   .rol-caso path { fill: var(--c-caso); }
+   .rol-para path { fill: var(--c-para); }
 
    .simbolo.seleccionado rect,
    .simbolo.seleccionado path {

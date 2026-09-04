@@ -31,12 +31,25 @@
    --aviso-texto: #7a5300;
    --aviso-borde: #f0d08a;
 
-   /* Símbolos del diagrama */
-   --c-terminador: #c9cfda;
-   --c-proceso: #8ce8bf;
-   --c-datos: #9ad2ff;
-   --c-decision: #ffdf8a;
-   --c-preparacion: #d9bdf5;
+   /*
+    * Símbolos del diagrama, por FUNCIÓN y no por forma.
+    *
+    * La notación ANSI usa la misma figura para cosas distintas —el paralelogramo
+    * vale igual para `Leer` que para `Escribir`—, así que el color desempata.
+    * Dentro de cada familia se conserva el tono: entrada y salida son los dos
+    * azulados, asignación y declaración los dos verdes. Así la forma sigue
+    * mandando y el color solo afina.
+    */
+   --c-inicio-fin: #c9cfda;
+   --c-asignacion: #8ce8bf;
+   --c-declaracion: #bfe3d4;
+   --c-entrada: #9ad2ff;
+   --c-salida: #8fe0e6;
+   --c-condicion: #ffdf8a;
+   --c-ciclo: #ffc178;
+   --c-caso: #f2e3a0;
+   --c-para: #d9bdf5;
+
    --borde-simbolo: #4d5166;
    --texto-simbolo: #16191f;
    --linea: #6b7180;
@@ -59,11 +72,21 @@
    --aviso-texto: #ffd77a;
    --aviso-borde: #5c4712;
 
-   --c-terminador: #4d5166;
-   --c-proceso: #00b578;
-   --c-datos: #2b8fd6;
-   --c-decision: #c99a1f;
-   --c-preparacion: #7d5bab;
+   /*
+    * En oscuro el texto de los símbolos es casi negro, así que los rellenos
+    * tienen que ser lo bastante claros para que se lea encima. El gris del
+    * terminador se aclaró respecto de la paleta original justo por eso.
+    */
+   --c-inicio-fin: #99a0b8;
+   --c-asignacion: #00b578;
+   --c-declaracion: #4aa78e;
+   --c-entrada: #3f9adf;
+   --c-salida: #22aeb4;
+   --c-condicion: #d3a626;
+   --c-ciclo: #dd8030;
+   --c-caso: #bda842;
+   --c-para: #9878c4;
+
    --borde-simbolo: #0d0f13;
    --texto-simbolo: #080b0e;
    --linea: #7d8595;

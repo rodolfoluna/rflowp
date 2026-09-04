@@ -39,7 +39,7 @@
       {#each PALETA as opcion (opcion.tipo)}
          <li>
             <button onclick={() => onElegir(opcion.tipo)}>
-               <span class="icono {opcion.simbolo}" aria-hidden="true"></span>
+               <span class="icono {opcion.simbolo} rol-{opcion.rol}" aria-hidden="true"></span>
                <span class="texto">
                   <strong>{opcion.etiqueta}</strong>
                   <small>{opcion.descripcion}</small>
@@ -130,26 +130,34 @@
       flex-shrink: 0;
       border: 2px solid var(--borde-simbolo);
    }
+   /* La forma la da la clase del símbolo… */
    .icono.process {
-      background: var(--c-proceso);
       border-radius: 3px;
    }
    .icono.io {
-      background: var(--c-datos);
       /* Paralelogramo, como en el diagrama. */
       clip-path: polygon(18% 0, 100% 0, 82% 100%, 0 100%);
       border: 0;
    }
    .icono.decision {
-      background: var(--c-decision);
       clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
       border: 0;
    }
    .icono.preparation {
-      background: var(--c-preparacion);
       clip-path: polygon(14% 0, 86% 0, 100% 50%, 86% 100%, 14% 100%, 0 50%);
       border: 0;
    }
+
+   /* …y el color, la función. Igual que en el diagrama, para que el alumno
+      reconozca el bloque que acaba de elegir. */
+   .icono.rol-asignacion { background: var(--c-asignacion); }
+   .icono.rol-declaracion { background: var(--c-declaracion); }
+   .icono.rol-entrada { background: var(--c-entrada); }
+   .icono.rol-salida { background: var(--c-salida); }
+   .icono.rol-condicion { background: var(--c-condicion); }
+   .icono.rol-ciclo { background: var(--c-ciclo); }
+   .icono.rol-caso { background: var(--c-caso); }
+   .icono.rol-para { background: var(--c-para); }
 
    .texto {
       display: flex;
