@@ -46,8 +46,11 @@ jobs:
 
       - run: npm run build
         env:
-          # ▼ Cámbialo por "/nombre-del-repositorio/" si no es un sitio de usuario.
-          RFLOWP_BASE: /
+          # La app vive en una subcarpeta porque el repositorio no es un sitio de
+          # usuario: https://rodolfoluna.github.io/rflowp/
+          # Si algún día se mueve a un dominio propio, hay que cambiar esto A LA VEZ
+          # que el dominio, o el manifiesto apuntará donde no es.
+          RFLOWP_BASE: /rflowp/
 
       - uses: actions/upload-pages-artifact@v3
         with:

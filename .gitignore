@@ -25,3 +25,6 @@ dist-ssr
 
 # PWA generado en el build
 dev-dist/
+
+# Certificados del servidor del aula: nunca se suben al repositorio.
+certs/
