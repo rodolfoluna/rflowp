@@ -16,6 +16,9 @@
 
 import { base64ABytes, bytesABase64, textoABytes } from './bytes';
 import { LLAVE_INCLUIDA } from './llave-del-curso';
+import { ALMACEN_LLAVES, operar } from '../file/bd';
+
+const CLAVE_LLAVES = 'actual';
 
 // ---------------------------------------------------------------------------
 // Llaves del alumno
@@ -62,39 +65,6 @@ export interface AlmacenLlaves {
    borrar(): Promise<void>;
 }
 
-const BD_NOMBRE = 'rflowp';
-const BD_VERSION = 2;
-const ALMACEN_IDENTIDAD = 'identidad';
-const ALMACEN_LLAVES = 'llaves';
-const CLAVE_LLAVES = 'actual';
-
-/**
- * Abre la base compartida con la identidad.
- *
- * Sube a la versión 2 creando el almacén de llaves. Se conserva el de identidad
- * para no borrar los datos de quien ya venía usando la app.
- */
-export function abrirBD(): Promise<IDBDatabase> {
-   return new Promise((resolve, reject) => {
-      const solicitud = indexedDB.open(BD_NOMBRE, BD_VERSION);
-
-      solicitud.onupgradeneeded = () => {
-         const bd = solicitud.result;
-         if (!bd.objectStoreNames.contains(ALMACEN_IDENTIDAD)) {
-            bd.createObjectStore(ALMACEN_IDENTIDAD);
-         }
-         if (!bd.objectStoreNames.contains(ALMACEN_LLAVES)) {
-            bd.createObjectStore(ALMACEN_LLAVES);
-         }
-      };
-
-      solicitud.onsuccess = () => resolve(solicitud.result);
-      solicitud.onerror = () => reject(solicitud.error);
-      solicitud.onblocked = () =>
-         reject(new Error('Hay otra pestaña de RFlowP abierta; ciérrala e intenta de nuevo.'));
-   });
-}
-
 /** Lo que se guarda en IndexedDB: los `CryptoKey` se clonan tal cual. */
 interface RegistroLlaves {
    maestra: CryptoKey;
@@ -103,64 +73,34 @@ interface RegistroLlaves {
    firmaPublicaJwk: JsonWebKey;
 }
 
-function operar<T>(
-   bd: IDBDatabase,
-   modo: IDBTransactionMode,
-   accion: (almacen: IDBObjectStore) => IDBRequest<T>,
-): Promise<T> {
-   return new Promise((resolve, reject) => {
-      const tx = bd.transaction(ALMACEN_LLAVES, modo);
-      const solicitud = accion(tx.objectStore(ALMACEN_LLAVES));
-      solicitud.onsuccess = () => resolve(solicitud.result);
-      solicitud.onerror = () => reject(solicitud.error);
-      tx.onabort = () => reject(tx.error);
-   });
-}
-
 export function almacenLlavesIndexedDB(): AlmacenLlaves {
    return {
       async leer() {
-         const bd = await abrirBD();
-         try {
-            const registro = await operar<RegistroLlaves | undefined>(bd, 'readonly', (a) =>
-               a.get(CLAVE_LLAVES),
-            );
-            if (!registro) return null;
-            return {
-               maestra: registro.maestra,
-               firma: {
-                  privateKey: registro.firmaPrivada,
-                  publicKey: registro.firmaPublica,
-               },
-               firmaPublicaJwk: registro.firmaPublicaJwk,
-            };
-         } finally {
-            bd.close();
-         }
+         const registro = await operar<RegistroLlaves | undefined>(
+            ALMACEN_LLAVES,
+            'readonly',
+            (a) => a.get(CLAVE_LLAVES),
+         );
+         if (!registro) return null;
+         return {
+            maestra: registro.maestra,
+            firma: { privateKey: registro.firmaPrivada, publicKey: registro.firmaPublica },
+            firmaPublicaJwk: registro.firmaPublicaJwk,
+         };
       },
 
       async guardar(llaves) {
-         const bd = await abrirBD();
-         try {
-            const registro: RegistroLlaves = {
-               maestra: llaves.maestra,
-               firmaPrivada: llaves.firma.privateKey,
-               firmaPublica: llaves.firma.publicKey,
-               firmaPublicaJwk: llaves.firmaPublicaJwk,
-            };
-            await operar(bd, 'readwrite', (a) => a.put(registro, CLAVE_LLAVES));
-         } finally {
-            bd.close();
-         }
+         const registro: RegistroLlaves = {
+            maestra: llaves.maestra,
+            firmaPrivada: llaves.firma.privateKey,
+            firmaPublica: llaves.firma.publicKey,
+            firmaPublicaJwk: llaves.firmaPublicaJwk,
+         };
+         await operar(ALMACEN_LLAVES, 'readwrite', (a) => a.put(registro, CLAVE_LLAVES));
       },
 
       async borrar() {
-         const bd = await abrirBD();
-         try {
-            await operar(bd, 'readwrite', (a) => a.delete(CLAVE_LLAVES));
-         } finally {
-            bd.close();
-         }
+         await operar(ALMACEN_LLAVES, 'readwrite', (a) => a.delete(CLAVE_LLAVES));
       },
    };
 }
@@ -352,33 +292,18 @@ const CLAVE_PROFESOR = 'profesor';
 export function almacenProfesorIndexedDB(): AlmacenProfesor {
    return {
       async leer() {
-         const bd = await abrirBD();
-         try {
-            const valor = await operar<ConfigProfesor | undefined>(bd, 'readonly', (a) =>
-               a.get(CLAVE_PROFESOR),
-            );
-            if (!valor) return null;
-            // Lo guardado antes de que existiera `origen` fue puesto a mano.
-            return { ...valor, origen: valor.origen ?? 'importada' };
-         } finally {
-            bd.close();
-         }
+         const valor = await operar<ConfigProfesor | undefined>(ALMACEN_LLAVES, 'readonly', (a) =>
+            a.get(CLAVE_PROFESOR),
+         );
+         if (!valor) return null;
+         // Lo guardado antes de que existiera `origen` fue puesto a mano.
+         return { ...valor, origen: valor.origen ?? 'importada' };
       },
       async guardar(config) {
-         const bd = await abrirBD();
-         try {
-            await operar(bd, 'readwrite', (a) => a.put(config, CLAVE_PROFESOR));
-         } finally {
-            bd.close();
-         }
+         await operar(ALMACEN_LLAVES, 'readwrite', (a) => a.put(config, CLAVE_PROFESOR));
       },
       async borrar() {
-         const bd = await abrirBD();
-         try {
-            await operar(bd, 'readwrite', (a) => a.delete(CLAVE_PROFESOR));
-         } finally {
-            bd.close();
-         }
+         await operar(ALMACEN_LLAVES, 'readwrite', (a) => a.delete(CLAVE_PROFESOR));
       },
    };
 }

@@ -13,6 +13,9 @@
  */
 
 import type { Identidad } from '../identity/identidad';
+import { ALMACEN_IDENTIDAD, operar } from './bd';
+
+const CLAVE_IDENTIDAD = 'actual';
 
 // ---------------------------------------------------------------------------
 // Identidad
@@ -25,73 +28,21 @@ export interface AlmacenIdentidad {
    borrar(): Promise<void>;
 }
 
-const BD_NOMBRE = 'rflowp';
-const BD_VERSION = 1;
-const ALMACEN_IDENTIDAD = 'identidad';
-const CLAVE_IDENTIDAD = 'actual';
-
-function abrirBD(): Promise<IDBDatabase> {
-   return new Promise((resolve, reject) => {
-      const solicitud = indexedDB.open(BD_NOMBRE, BD_VERSION);
-
-      solicitud.onupgradeneeded = () => {
-         const bd = solicitud.result;
-         if (!bd.objectStoreNames.contains(ALMACEN_IDENTIDAD)) {
-            bd.createObjectStore(ALMACEN_IDENTIDAD);
-         }
-      };
-
-      solicitud.onsuccess = () => resolve(solicitud.result);
-      solicitud.onerror = () => reject(solicitud.error);
-      solicitud.onblocked = () =>
-         reject(new Error('Hay otra pestaña de RFlowP abierta; ciérrala e intenta de nuevo.'));
-   });
-}
-
-function transaccion<T>(
-   bd: IDBDatabase,
-   modo: IDBTransactionMode,
-   accion: (almacen: IDBObjectStore) => IDBRequest<T>,
-): Promise<T> {
-   return new Promise((resolve, reject) => {
-      const tx = bd.transaction(ALMACEN_IDENTIDAD, modo);
-      const solicitud = accion(tx.objectStore(ALMACEN_IDENTIDAD));
-      solicitud.onsuccess = () => resolve(solicitud.result);
-      solicitud.onerror = () => reject(solicitud.error);
-      tx.onabort = () => reject(tx.error);
-   });
-}
-
 export function almacenIdentidadIndexedDB(): AlmacenIdentidad {
    return {
       async leer() {
-         const bd = await abrirBD();
-         try {
-            const valor = await transaccion<Identidad | undefined>(bd, 'readonly', (a) =>
-               a.get(CLAVE_IDENTIDAD),
-            );
-            return valor ?? null;
-         } finally {
-            bd.close();
-         }
+         const valor = await operar<Identidad | undefined>(ALMACEN_IDENTIDAD, 'readonly', (a) =>
+            a.get(CLAVE_IDENTIDAD),
+         );
+         return valor ?? null;
       },
 
       async guardar(identidad) {
-         const bd = await abrirBD();
-         try {
-            await transaccion(bd, 'readwrite', (a) => a.put(identidad, CLAVE_IDENTIDAD));
-         } finally {
-            bd.close();
-         }
+         await operar(ALMACEN_IDENTIDAD, 'readwrite', (a) => a.put(identidad, CLAVE_IDENTIDAD));
       },
 
       async borrar() {
-         const bd = await abrirBD();
-         try {
-            await transaccion(bd, 'readwrite', (a) => a.delete(CLAVE_IDENTIDAD));
-         } finally {
-            bd.close();
-         }
+         await operar(ALMACEN_IDENTIDAD, 'readwrite', (a) => a.delete(CLAVE_IDENTIDAD));
       },
    };
 }

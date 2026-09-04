@@ -80,6 +80,14 @@
    let identidad = $state<Identidad | null>(null);
    let arrancando = $state(true);
    let sinAlmacenamiento = $state(false);
+   /**
+    * El aviso de almacenamiento se puede cerrar.
+    *
+    * Antes era fijo y en un teléfono tapaba media pantalla, estorbando
+    * justo para editar. Un aviso que no se puede quitar es un aviso que
+    * acaba estorbando más de lo que informa.
+    */
+   let avisoAlmacenamientoOculto = $state(false);
    let restauradoDeBorrador = false;
 
    /** Archivo de la biblioteca que está abierto, si lo hay. */
@@ -595,6 +603,18 @@
       </button>
    </header>
 
+   {#if sinAlmacenamiento && !avisoAlmacenamientoOculto}
+      <div class="barra-almacenamiento" role="alert">
+         <span>
+            Este navegador no guarda en el dispositivo. Puedes trabajar y exportar, pero
+            lo guardado se perderá al cerrar.
+         </span>
+         <button onclick={() => (avisoAlmacenamientoOculto = true)} aria-label="Ocultar el aviso">
+            ✕
+         </button>
+      </div>
+   {/if}
+
    <main>
       <section class="panel codigo" class:oculto-movil={vista !== 'codigo'}>
          <div class="editor-caja">
@@ -815,12 +835,6 @@
       <div class="aviso-flotante" role="status">{aviso}</div>
    {/if}
 
-   {#if sinAlmacenamiento}
-      <div class="aviso-flotante persistente" role="alert">
-         Este navegador no deja guardar en el dispositivo. Podrás trabajar y exportar,
-         pero lo guardado se perderá al cerrar.
-      </div>
-   {/if}
 </div>
 {/if}
 
@@ -1211,14 +1225,42 @@
       color: var(--aviso-texto);
       border-color: var(--aviso-borde);
    }
-   .aviso-flotante.persistente {
-      bottom: auto;
-      top: 64px;
-      border-radius: 12px;
-      border-color: var(--aviso-borde);
+   /*
+    * Barra de una línea bajo la cabecera, en el flujo del documento: empuja el
+    * contenido en vez de flotar sobre él, así nunca tapa el diagrama.
+    */
+   .barra-almacenamiento {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      flex-shrink: 0;
+      padding: 8px 10px 8px 14px;
       background: var(--aviso-fondo);
       color: var(--aviso-texto);
-      line-height: 1.45;
+      border-bottom: 1px solid var(--aviso-borde);
+      font-size: 12.5px;
+      line-height: 1.4;
+   }
+   .barra-almacenamiento span {
+      flex: 1;
+      min-width: 0;
+   }
+   .barra-almacenamiento button {
+      flex-shrink: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font-size: 15px;
+      line-height: 1;
+      cursor: pointer;
+      /* 32px: objetivo táctil aceptable sin robarle sitio a la línea. */
+      width: 32px;
+      height: 32px;
+      margin: -6px -4px -6px 0;
+      border-radius: 7px;
+   }
+   .barra-almacenamiento button:hover {
+      background: color-mix(in srgb, var(--aviso-texto) 12%, transparent);
    }
 
    /* --- Móvil: una vista a la vez ------------------------------------- */
