@@ -35,6 +35,7 @@
 
    const esProfesor = $derived(config?.privada != null);
    const hayCurso = $derived(config != null);
+   const esIncluida = $derived(config?.origen === 'incluida');
 
    function limpiar() {
       mensaje = null;
@@ -73,6 +74,7 @@
             huella,
             publica: par.publica,
             privada: await importarPrivadaProfesor(par.privadaJwk),
+            origen: 'importada',
          });
 
          mensaje =
@@ -101,6 +103,7 @@
                huella,
                publica: await importarPublicaProfesor(leida.jwk),
                privada: null,
+               origen: 'importada',
             });
             mensaje = `Llave del curso «${leida.etiqueta}» configurada. A partir de ahora tu profesor podrá abrir lo que entregues.`;
          } else {
@@ -112,6 +115,7 @@
                huella,
                publica: null,
                privada: await importarPrivadaProfesor(leida.jwk),
+               origen: 'importada',
             });
             mensaje = `Modo profesor activo para «${leida.etiqueta}». Ya puedes abrir las entregas de tus alumnos.`;
          }
@@ -136,17 +140,36 @@
 
       <div class="cuerpo">
          {#if hayCurso && config}
-            <div class="estado" class:profesor={esProfesor}>
-               <strong>{esProfesor ? 'Modo profesor' : 'Curso configurado'}</strong>
+            <div class="estado" class:profesor={esProfesor} class:incluida={esIncluida}>
+               <strong>
+                  {esProfesor
+                     ? 'Modo profesor'
+                     : esIncluida
+                       ? 'Llave incluida con la app'
+                       : 'Curso configurado'}
+               </strong>
                <span class="etiqueta">{config.etiqueta}</span>
                <code>{config.huella}</code>
                <p>
                   {esProfesor
                      ? 'Puedes abrir las entregas de cualquier alumno de este curso.'
-                     : 'Lo que guardes y exportes podrá abrirlo tu profesor.'}
+                     : esIncluida
+                       ? 'La app funciona desde ya. Si tu profesor te da la llave de tu curso, impórtala: sustituirá a esta.'
+                       : 'Lo que guardes y exportes podrá abrirlo tu profesor.'}
                </p>
             </div>
-            <button class="secundario" onclick={quitar}>Quitar esta llave</button>
+
+            {#if esIncluida}
+               <p class="aviso">
+                  <strong>Si eres el profesor, genera la tuya.</strong>
+                  Esta llave viene con la app y su parte privada la tiene quien publicó
+                  el proyecto, no tú: con ella no podrías abrir las entregas de tus alumnos.
+               </p>
+            {:else}
+               <button class="secundario" onclick={quitar}>
+                  Quitar esta llave y volver a la incluida
+               </button>
+            {/if}
          {:else}
             <p class="aviso" role="alert">
                <strong>No hay llave de curso configurada.</strong>
@@ -270,6 +293,10 @@
    }
    .estado.profesor {
       border-color: var(--acento);
+   }
+   /* La incluida es un punto de partida, no un estado configurado: se atenúa. */
+   .estado.incluida strong {
+      color: var(--texto-tenue);
    }
    .estado strong {
       font-size: 13px;

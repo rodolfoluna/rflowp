@@ -15,6 +15,7 @@
  */
 
 import { base64ABytes, bytesABase64, textoABytes } from './bytes';
+import { LLAVE_INCLUIDA } from './llave-del-curso';
 
 // ---------------------------------------------------------------------------
 // Llaves del alumno
@@ -330,6 +331,14 @@ export interface ConfigProfesor {
    publica: CryptoKey | null;
    /** Privada: solo presente cuando la app está en modo profesor. */
    privada: CryptoKey | null;
+   /**
+    * De dónde salió esta llave.
+    *
+    * `incluida` es la que viene compilada con la app, para que funcione desde
+    * el primer arranque; `importada` es la que el profesor puso a mano y que
+    * manda sobre la anterior.
+    */
+   origen: 'incluida' | 'importada';
 }
 
 export interface AlmacenProfesor {
@@ -348,7 +357,9 @@ export function almacenProfesorIndexedDB(): AlmacenProfesor {
             const valor = await operar<ConfigProfesor | undefined>(bd, 'readonly', (a) =>
                a.get(CLAVE_PROFESOR),
             );
-            return valor ?? null;
+            if (!valor) return null;
+            // Lo guardado antes de que existiera `origen` fue puesto a mano.
+            return { ...valor, origen: valor.origen ?? 'importada' };
          } finally {
             bd.close();
          }
@@ -370,6 +381,28 @@ export function almacenProfesorIndexedDB(): AlmacenProfesor {
          }
       },
    };
+}
+
+/**
+ * Configuración a partir de la llave que viene con la app.
+ *
+ * Se usa cuando no hay ninguna guardada, para que un alumno que empieza a
+ * trabajar antes de recibir la llave de su profesor no genere archivos que
+ * nadie más podrá abrir.
+ */
+export async function configIncluida(): Promise<ConfigProfesor | null> {
+   try {
+      return {
+         etiqueta: LLAVE_INCLUIDA.etiqueta,
+         huella: await huellaDeLlave(LLAVE_INCLUIDA.jwk),
+         publica: await importarPublicaProfesor(LLAVE_INCLUIDA.jwk),
+         privada: null,
+         origen: 'incluida',
+      };
+   } catch {
+      // Una llave incluida inválida no debe impedir usar la app.
+      return null;
+   }
 }
 
 export function almacenProfesorEnMemoria(

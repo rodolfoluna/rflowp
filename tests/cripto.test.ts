@@ -20,6 +20,7 @@ import {
    ErrorLlave,
 } from '../src/crypto/llaves';
 import { huellaDeFirma } from '../src/crypto/sobre';
+import { HUELLA_INCLUIDA, LLAVE_INCLUIDA } from '../src/crypto/llave-del-curso';
 import { almacenArchivosEnMemoria } from '../src/file/almacenes';
 import { Biblioteca, type ContextoCripto } from '../src/file/biblioteca.svelte';
 import { deserializar, ErrorArchivo } from '../src/file/algx';
@@ -327,6 +328,65 @@ describe('huellas: cómo se detecta la copia', () => {
 });
 
 // ---------------------------------------------------------------------------
+
+describe('llave incluida con la app', () => {
+   it('es una pública válida y sirve para cifrar', async () => {
+      const publica = await importarPublicaProfesor(LLAVE_INCLUIDA.jwk);
+      const ana = await instalacion(publica);
+
+      const id = await ana.bib.guardar({
+         programa: programa(),
+         titulo: 'Con la llave incluida',
+         identidad: ANA,
+      });
+      const { texto } = await ana.bib.paraExportar(id);
+
+      // El sobre para el profesor existe: no es un archivo que solo abra su autor.
+      const { carga } = deserializar(texto);
+      expect(carga.cifrado && carga.sobre.sobreProfesor).not.toBeNull();
+   });
+
+   it('NO trae la parte privada: el repositorio no puede descifrar nada', () => {
+      // Si algún día alguien pega aquí una llave privada por descuido, esto lo
+      // detiene: `d` es el componente secreto de una llave EC.
+      expect(LLAVE_INCLUIDA.clase).toBe('publica');
+      expect(LLAVE_INCLUIDA.jwk).not.toHaveProperty('d');
+   });
+
+   it('la huella publicada coincide con la llave', async () => {
+      expect(await huellaDeLlave(LLAVE_INCLUIDA.jwk)).toBe(HUELLA_INCLUIDA);
+   });
+
+   it('una llave del profesor importada sustituye a la incluida', async () => {
+      // El caso real: el alumno empieza con la incluida y luego importa la de
+      // su curso. Lo nuevo debe cifrarse hacia su profesor, no hacia la otra.
+      const prof = await generarLlavesProfesor();
+      const incluida = await importarPublicaProfesor(LLAVE_INCLUIDA.jwk);
+
+      let publicaActual: CryptoKey = incluida;
+      const llavesAna = await generarLlavesAlumno();
+      const bib = new Biblioteca(
+         almacenArchivosEnMemoria(),
+         '1.0.0',
+         () => ({ alumno: llavesAna, profesorPublica: publicaActual, profesorPrivada: null }),
+         () => `t${Math.random()}.algx`,
+      );
+
+      await bib.guardar({ programa: programa(), titulo: 'Antes', identidad: ANA });
+      publicaActual = prof.publica;
+      const despues = await bib.guardar({ programa: programa(), titulo: 'Después', identidad: ANA });
+
+      const bibProf = new Biblioteca(
+         almacenArchivosEnMemoria(),
+         '1.0.0',
+         () => ({ alumno: null, profesorPublica: null, profesorPrivada: prof.privada }),
+         () => `p${Math.random()}.algx`,
+      );
+      const { texto } = await bib.paraExportar(despues);
+      const abierto = await bibProf.abrir(await bibProf.importar(texto));
+      expect(abierto.como).toBe('profesor');
+   });
+});
 
 describe('llaves del profesor', () => {
    it('el par se exporta, se lee y vuelve a funcionar', async () => {

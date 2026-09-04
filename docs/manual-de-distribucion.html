@@ -554,6 +554,37 @@ MSYS_NO_PATHCONV=1 RFLOWP_BASE=/rflowp/ npm run build</code></pre>
    </section>
 
    <section>
+      <h2>La llave incluida con la app</h2>
+      <p>
+         La app se compila con una llave pública dentro, para que funcione desde el primer
+         arranque. Sin ella, un alumno que guarda antes de recibir la llave de su profesor
+         produciría archivos que nadie más podría abrir.
+      </p>
+      <p>
+         Que esa llave esté en un repositorio público no la debilita: es <em>pública</em>,
+         sirve para cifrar hacia el profesor y no para descifrar nada. Lo que jamás se sube es
+         la privada, que vive en <code>llaves-profesor/</code>, ignorada por git.
+      </p>
+
+      <div class="caja grave">
+         <h3>Si reutilizas este proyecto para tu curso, genera la tuya</h3>
+         <p>
+            Quien clone y compile este repositorio obtiene la misma llave incluida. Si no la
+            reemplazas, <strong>tus alumnos estarían cifrando hacia el dueño de la privada de
+            este repositorio, no hacia ti</strong>, y no podrías abrir sus entregas.
+         </p>
+      </div>
+
+      <pre><code>node scripts/generar-llave-del-curso.mjs "Algoritmos 3A 2026"</code></pre>
+      <p>
+         Escribe la pública en <code>src/crypto/llave-del-curso.ts</code> —que sí se sube— y la
+         privada en <code>llaves-profesor/</code> —que no—. Después basta con reconstruir y
+         publicar. La llave que un profesor importe a mano desde la app sustituye a la incluida
+         en ese dispositivo.
+      </p>
+   </section>
+
+   <section>
       <h2>Laboratorio sin internet</h2>
       <p>
          Si el aula no tiene salida a internet, el proyecto trae un servidor HTTPS para la red

@@ -40,6 +40,7 @@
    import {
       almacenLlavesIndexedDB,
       almacenProfesorIndexedDB,
+      configIncluida,
       generarLlavesAlumno,
       type ConfigProfesor,
       type LlavesAlumno,
@@ -147,6 +148,13 @@
          configProfesor = await almacenProfesor.leer();
       } catch {
          llaves = null;
+      }
+
+      // Sin llave guardada se usa la que viene con la app. Así un alumno que
+      // empieza antes de recibir la de su profesor no produce archivos que
+      // nadie más podrá abrir.
+      if (!configProfesor) {
+         configProfesor = await configIncluida();
       }
 
       // Identidad sin llaves: pasó por una versión anterior al cifrado. Se le
@@ -722,7 +730,13 @@
          }}
          {preferenciaTema}
          llaveCurso={configProfesor
-            ? `${configProfesor.etiqueta}${modoProfesor ? ' · modo profesor' : ''}`
+            ? `${configProfesor.etiqueta}${
+                 modoProfesor
+                    ? ' · modo profesor'
+                    : configProfesor.origen === 'incluida'
+                      ? ' · incluida con la app'
+                      : ''
+              }`
             : null}
          onBorrarDatos={() => {
             menuAbierto = false;
@@ -778,7 +792,8 @@
          }}
          onQuitar={async () => {
             await almacenProfesor.borrar();
-            configProfesor = null;
+            // No se queda sin llave: vuelve a la que trae la app.
+            configProfesor = await configIncluida();
          }}
          onCerrar={() => (panelProfesor = false)}
       />

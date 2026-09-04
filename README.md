@@ -303,16 +303,41 @@ guardar es una frase que se puede prestar, y con ella se prestaría la identidad
 entera. La autoridad de recuperación es el profesor, que puede abrir cualquier
 entrega y devolvérsela al alumno.
 
+### La llave incluida con la app
+
+La app trae una llave pública compilada dentro
+(`src/crypto/llave-del-curso.ts`), para que **funcione desde el primer
+arranque**: sin ella, un alumno que guarda antes de recibir la llave de su
+profesor produce archivos que nadie más podrá abrir.
+
+Es una llave **pública**: sirve para cifrar hacia el profesor, no para
+descifrar. Estar en el repositorio no la debilita.
+
+> ⚠️ **Si reutilizas este proyecto para tu curso, genera la tuya.**
+>
+> ```bash
+> node scripts/generar-llave-del-curso.mjs "Nombre de tu curso"
+> ```
+>
+> Si no lo haces, tus alumnos estarían cifrando hacia el dueño de la llave
+> privada de este repositorio, no hacia ti, y no podrías abrir sus entregas.
+
+El script escribe la pública en `src/crypto/` y la privada en
+`llaves-profesor/`, que está en `.gitignore` y **nunca se sube**. La llave que
+el profesor importe a mano sustituye a la incluida.
+
 ### Cómo se reparte la llave del curso
 
-1. El profesor entra en **Llave del curso → Generar el par**. Se descargan dos
+1. El profesor entra en **Llave del curso → Generar el par**, lo que reemplaza
+   la llave incluida por la suya. Se descargan dos
    archivos: la **pública**, que reparte, y la **privada**, que guarda él.
 2. Los alumnos importan la pública una vez, al principio del curso.
 3. Ambos ven la misma **huella** (`MMTJ-DKNN-SJCD`), fácil de dictar en voz alta
    para confirmar que todos tienen la llave correcta.
 
-Si un alumno guarda **antes** de importar la llave, ese archivo solo lo podrá
-abrir él: el profesor no. La app lo avisa en el menú y al exportar.
+Gracias a la llave incluida, un alumno que empieza antes de importar la de su
+curso no produce archivos huérfanos: quedan cifrados hacia la llave que trae la
+app. Aun así, hasta que importe la del curso, su profesor no podrá abrirlos.
 
 ## Revisar entregas
 
@@ -334,7 +359,7 @@ la volvería inútil como evidencia.
 
 ## Pruebas
 
-302 pruebas, sin dependencias del navegador:
+306 pruebas, sin dependencias del navegador:
 
 - **Ida y vuelta**: sobre 16 algoritmos, `parse → print → parse` devuelve el
   mismo árbol, imprimir es idempotente y los ids no se repiten. Es la red de
@@ -354,6 +379,9 @@ la volvería inútil como evidencia.
   al final de un bloque, y el conteo se conserva.
 - **Identidad**: se aceptan formatos de varias escuelas, se normaliza el número
   de control, y dos identidades con el mismo número tienen `deviceId` distinto.
+- **Llave incluida**: es una pública válida, sirve para cifrar, **no contiene
+  la parte privada** (una prueba lo comprueba explícitamente, para que nadie
+  pegue ahí una privada por descuido), y la que el profesor importe la sustituye.
 - **Formato y biblioteca**: el ciclo guardar/leer conserva todo, sobrescribir no
   reinicia la fecha de creación, un archivo dañado no oculta a los demás, y el
   borrador conserva texto que no compila.

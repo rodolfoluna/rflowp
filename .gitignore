@@ -28,3 +28,6 @@ dev-dist/
 
 # Certificados del servidor del aula: nunca se suben al repositorio.
 certs/
+
+# Llaves del profesor: la privada NUNCA se sube.
+llaves-profesor/
