@@ -174,7 +174,7 @@ consecuencia del diseño y no un problema de sincronización.
 | `src/file/` | Formatos `.algx` y `.algxp`, almacenes, biblioteca y transferencia |
 | `src/ui/` | Ejemplos, menú, tema y piezas de interfaz |
 | `docs/` | Instructivos de una página y manual de distribución |
-| `tests/` | Ciclo de ida y vuelta, intérprete, layout, mutaciones, documento, cuaderno, plantillas, comentarios |
+| `tests/` | Ciclo de ida y vuelta, intérprete, layout, mutaciones, documento, cuaderno, plantillas, guardas, comentarios |
 
 Decisiones que conviene no deshacer sin pensarlo:
 
@@ -396,6 +396,28 @@ bitácora son **deliberadamente laxos** — es preferible dejar pasar una copia 
 señalar a quien sí trabajó — y los algoritmos de menos de 6 sentencias no se
 comparan nunca, porque «lee dos números y súmalos» sale igual en todo el grupo.
 
+### Apoyo de portapapeles
+
+Bloquear el portapapeles también estorba a quien lo necesita para escribir:
+dictado, teclado alternativo, lector de pantalla. Dejar a ese alumno sin poder
+usar la app no es un precio aceptable, así que en el menú hay un interruptor
+**Permitir pegar**.
+
+No se pide permiso al profesor: una app sin servidor no puede comprobarlo, y
+hacer que un alumno espere autorización para poder escribir sería peor que el
+problema. A cambio, cada pegado queda contado en la bitácora como
+`pegadosPermitidos`, **aparte** de los bloqueados —mezclarlos convertiría una
+adaptación en una sospecha— y el panel lo muestra en gris, no en rojo.
+
+Que alguien lo encienda para copiar es posible. Aun así se gana: hoy quien
+desactiva las guardas desde las herramientas del navegador no deja rastro
+ninguno, y esto sí lo deja.
+
+Copiar y cortar siguen bloqueados con el apoyo puesto, y arrastrar texto
+**hacia fuera** también: la necesidad que cubre es meter texto, no sacarlo. El
+ajuste vive en `localStorage` y sobrevive a «borrar mis datos», como el tema:
+es una adaptación del aparato, no parte del trabajo.
+
 El tiempo se cuenta solo con la app **visible y con el foco**: si contara con la
 pestaña en segundo plano, dejar la app abierta toda la tarde inflaría la cifra y
 la volvería inútil como evidencia.
@@ -477,9 +499,6 @@ Dos avisos del manual que conviene no descubrir tarde:
 
 ## Pendiente antes de liberar
 
-- El bloqueo del portapapeles también estorba a quien lo usa por necesidad
-  (lectores de pantalla, teclados alternativos, dificultades motrices). Si algún
-  alumno lo necesita, hay que poder desactivarlo para él; hoy no hay forma.
 - Migrar el `<textarea>` a CodeMirror 6 si se quiere resaltado de sintaxis y
   marcas de error en el margen. **No hace falta para bloquear el portapapeles**,
   como se dijo antes por error: el evento `paste` de un `<textarea>` es

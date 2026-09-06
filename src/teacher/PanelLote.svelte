@@ -41,6 +41,8 @@
       tiempo: number;
       ediciones: number;
       pegados: number;
+      /** Pegados con el apoyo de portapapeles puesto. No es lo mismo. */
+      pegadosPermitidos: number;
       sospecha: Verosimilitud;
       /** Sin sentencias: el alumno lo dejó sin empezar. */
       vacio: boolean;
@@ -121,6 +123,7 @@
                   tiempo: e.bitacora.segundosActivos,
                   ediciones: e.bitacora.ediciones,
                   pegados: e.bitacora.pegadosBloqueados,
+                  pegadosPermitidos: e.bitacora.pegadosPermitidos,
                   sospecha: sospechaDe(e.bitacora, vacio),
                   vacio,
                });
@@ -354,6 +357,14 @@
                                  {#if !f.firmaValida}
                                     <span class="mal">alterado</span>
                                  {/if}
+                                 {#if f.ejercicios?.some((e) => e.pegadosPermitidos > 0)}
+                                    <span
+                                       class="apoyo"
+                                       title="Este alumno usa el apoyo de portapapeles: puede pegar, y lo pegado queda contado"
+                                    >
+                                       apoyo
+                                    </span>
+                                 {/if}
                                  {#if f.enunciadoAlterado}
                                     <span class="ojo" title="Los enunciados no son los que se repartieron">
                                        otro enunciado
@@ -382,6 +393,14 @@
                                  <td class="num">{e.vacio ? '—' : duracion(e.tiempo)}</td>
                                  <td class="num" class:alerta={e.pegados > 0}>
                                     {e.pegados || ''}
+                                    {#if e.pegadosPermitidos > 0}
+                                       <span
+                                          class="apoyo"
+                                          title="Pegados con el apoyo de portapapeles puesto"
+                                       >
+                                          {e.pegadosPermitidos}&nbsp;⌨
+                                       </span>
+                                    {/if}
                                  </td>
                                  <td class="estado">
                                     {#if e.vacio}
@@ -690,6 +709,21 @@
       color: var(--texto-debil);
       border: 1px solid var(--borde);
    }
+   /*
+    * En gris y no en rojo a propósito: el apoyo de portapapeles es una
+    * adaptación de accesibilidad, no una señal de sospecha. Se muestra para que
+    * el profesor sepa leer el resto de la evidencia de este alumno, no para
+    * señalarlo.
+    */
+   .apoyo {
+      color: var(--texto-debil);
+      border: 1px solid var(--borde);
+      font-size: 11px;
+      border-radius: 5px;
+      padding: 1px 6px;
+      white-space: nowrap;
+   }
+
    .vacio {
       color: var(--texto-debil);
       font-style: italic;

@@ -67,6 +67,18 @@ export interface BitacoraEjercicio {
    ediciones: number;
    /** Intentos de pegar que la app bloqueó mientras se editaba este ejercicio. */
    pegadosBloqueados: number;
+   /**
+    * Pegados que SÍ pasaron, con el apoyo de portapapeles puesto.
+    *
+    * El apoyo existe porque bloquear el portapapeles también estorba a quien lo
+    * necesita para escribir —dictado, teclado alternativo, lector de pantalla—,
+    * y dejar a ese alumno sin poder usar la app no es un precio aceptable.
+    *
+    * Se cuenta aparte de `pegadosBloqueados` porque no significa lo mismo: uno
+    * es un intento frenado y el otro un pegado consentido. Mezclarlos
+    * convertiría una adaptación en una sospecha.
+    */
+   pegadosPermitidos: number;
 }
 
 /**
@@ -132,11 +144,17 @@ export interface ArchivoLeido {
 }
 
 export function bitacoraNueva(): Bitacora {
-   return { sesiones: 1, segundosActivos: 0, ediciones: 0, pegadosBloqueados: 0 };
+   return {
+      sesiones: 1,
+      segundosActivos: 0,
+      ediciones: 0,
+      pegadosBloqueados: 0,
+      pegadosPermitidos: 0,
+   };
 }
 
 export function bitacoraEjercicioNueva(): BitacoraEjercicio {
-   return { segundosActivos: 0, ediciones: 0, pegadosBloqueados: 0 };
+   return { segundosActivos: 0, ediciones: 0, pegadosBloqueados: 0, pegadosPermitidos: 0 };
 }
 
 /** Totales del cuaderno, sumando sus ejercicios. */
@@ -150,8 +168,15 @@ export function totalizarBitacora(
          segundosActivos: suma.segundosActivos + e.bitacora.segundosActivos,
          ediciones: suma.ediciones + e.bitacora.ediciones,
          pegadosBloqueados: suma.pegadosBloqueados + e.bitacora.pegadosBloqueados,
+         pegadosPermitidos: suma.pegadosPermitidos + e.bitacora.pegadosPermitidos,
       }),
-      { sesiones, segundosActivos: 0, ediciones: 0, pegadosBloqueados: 0 },
+      {
+         sesiones,
+         segundosActivos: 0,
+         ediciones: 0,
+         pegadosBloqueados: 0,
+         pegadosPermitidos: 0,
+      },
    );
 }
 

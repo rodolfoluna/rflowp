@@ -42,16 +42,6 @@ export class Cronista {
     */
    constructor(private readonly estaActiva: () => boolean = actividadDelNavegador) {}
 
-   /** Instantánea para guardar dentro del archivo. */
-   instantanea(pegadosBloqueados: number): Bitacora {
-      return {
-         sesiones: this.#sesiones,
-         segundosActivos: Math.round(this.#segundosActivos),
-         ediciones: this.#ediciones,
-         pegadosBloqueados,
-      };
-   }
-
    get segundosActivos(): number {
       return Math.round(this.#segundosActivos);
    }

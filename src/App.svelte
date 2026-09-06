@@ -440,6 +440,7 @@
          segundosActivos: previa.segundosActivos + cronista.segundosActivos,
          ediciones: previa.ediciones + cronista.ediciones,
          pegadosBloqueados: guardas.pegadosBloqueados,
+         pegadosPermitidos: guardas.pegadosPermitidos,
       });
    }
 
@@ -448,7 +449,11 @@
       volcarMedicion();
       midiendoId = cuaderno.activoId;
       cronista.reiniciar();
-      guardas.fijarDesdeArchivo(cuaderno.bitacoraDe(midiendoId)?.pegadosBloqueados ?? 0);
+      const bitacora = cuaderno.bitacoraDe(midiendoId);
+      guardas.fijarDesdeArchivo(
+         bitacora?.pegadosBloqueados ?? 0,
+         bitacora?.pegadosPermitidos ?? 0,
+      );
    }
 
    // Al cambiar de ejercicio, se reparte lo medido antes de seguir.
@@ -865,6 +870,8 @@
             menuAbierto = false;
             editorPlantilla = true;
          }}
+         apoyoPortapapeles={guardas.apoyo}
+         onApoyoPortapapeles={(activo) => guardas.apoyar(activo)}
          {preferenciaTema}
          onAcercaDe={() => {
             menuAbierto = false;

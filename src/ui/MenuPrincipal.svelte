@@ -29,6 +29,9 @@
       modoProfesor: boolean;
       onRevisarLote: () => void;
       onCrearPlantilla: () => void;
+      /** Apoyo de portapapeles: permite pegar a quien lo necesita para escribir. */
+      apoyoPortapapeles: boolean;
+      onApoyoPortapapeles: (activo: boolean) => void;
       preferenciaTema: PreferenciaTema;
       onAcercaDe: () => void;
       onBorrarDatos: () => void;
@@ -50,6 +53,8 @@
       modoProfesor,
       onRevisarLote,
       onCrearPlantilla,
+      apoyoPortapapeles,
+      onApoyoPortapapeles,
       preferenciaTema,
       onAcercaDe,
       onBorrarDatos,
@@ -179,6 +184,24 @@
          <span class="texto">
             <strong>Acerca de</strong>
             <small>Versión y licencias</small>
+         </span>
+      </button>
+   </div>
+
+   <div class="apoyo">
+      <button
+         role="switch"
+         aria-checked={apoyoPortapapeles}
+         onclick={() => onApoyoPortapapeles(!apoyoPortapapeles)}
+      >
+         <span class="palanca" class:puesta={apoyoPortapapeles} aria-hidden="true"></span>
+         <span class="texto">
+            <strong>Permitir pegar</strong>
+            <small>
+               {apoyoPortapapeles
+                  ? 'Puedes pegar. Lo que pegues queda anotado en tu archivo y tu profesor lo verá.'
+                  : 'Actívalo solo si necesitas el portapapeles para escribir: dictado, teclado alternativo o lector de pantalla.'}
+            </small>
          </span>
       </button>
    </div>
@@ -347,6 +370,67 @@
    }
    .grupo button.pendiente small {
       color: var(--aviso-texto);
+   }
+
+   /*
+    * El interruptor va con el tema y no con las acciones: es un ajuste del
+    * aparato, no algo que se le hace al algoritmo abierto.
+    */
+   .apoyo button {
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--borde);
+      background: var(--superficie-alta);
+      color: var(--texto);
+      border-radius: 11px;
+      padding: 11px 12px;
+      cursor: pointer;
+      font: inherit;
+   }
+   .apoyo .texto {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+   }
+   .apoyo strong {
+      font-size: 13.5px;
+      font-weight: 600;
+   }
+   .apoyo small {
+      font-size: 12px;
+      color: var(--texto-tenue);
+      line-height: 1.4;
+   }
+   .palanca {
+      flex-shrink: 0;
+      width: 34px;
+      height: 20px;
+      margin-top: 1px;
+      border-radius: 999px;
+      background: var(--borde);
+      position: relative;
+      transition: background 0.15s;
+   }
+   .palanca::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--superficie);
+      transition: transform 0.15s;
+   }
+   .palanca.puesta {
+      background: var(--acento);
+   }
+   .palanca.puesta::after {
+      transform: translateX(14px);
    }
 
    .tema {
