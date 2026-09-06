@@ -252,6 +252,14 @@ hace lo que uno espera.
 - No se puede editar gráficamente mientras el pseudocódigo tiene errores:
   reimprimir el árbol borraría lo que se está escribiendo a medias.
 
+Las sentencias con **listas** —las partes de un `Escribir`, los valores de un
+caso de `Segun`— se editan enteras desde el panel: una parte abierta a la vez y
+las demás como una fila que se toca para abrirla. Abrirlas todas a la vez no
+servía: cada expresión trae su propio teclado de símbolos y tres apilados dejan
+el panel en un rollo que no se puede usar con el pulgar.
+
+---
+
 ## Identidad y archivos
 
 - En el primer arranque se piden **número de control y nombre**. No hay cuenta
@@ -505,8 +513,6 @@ Dos avisos del manual que conviene no descubrir tarde:
   cancelable y eso es todo lo que se necesita. Si se migra, hay que comprobar
   que escribir el texto desde el código **no** dispara su `oninput`: de eso
   depende que las dos vías de edición no se muerdan la cola.
-- El inspector edita el primer valor de un `Escribir` con varias partes; el
-  resto se editan desde el pseudocódigo. Falta la edición de la lista completa.
 - La comparación de algoritmos es exacta sobre la forma: detecta renombrados y
   cambios de mensaje, pero no una reescritura parcial. Un alumno que cambie el
   orden de dos sentencias independientes ya no coincide.

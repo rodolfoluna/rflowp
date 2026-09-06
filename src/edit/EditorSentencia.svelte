@@ -7,6 +7,7 @@
     * así `reemplazar` puede conservar los comentarios y el historial de
     * deshacer sigue siendo una lista de árboles.
     */
+   import { untrack } from 'svelte';
    import EditorExpresion from './EditorExpresion.svelte';
    import { printExpression } from '../core/printer';
    import { DATA_TYPES, nextId, type DataType, type Expression, type Program, type Statement } from '../core/ast';
@@ -32,6 +33,16 @@
 
    let { programa, nodoId, onAplicar, onCerrar }: Props = $props();
 
+   /**
+    * Qué parte de una lista está abierta para editar.
+    *
+    * Se muestra una sola: cada `EditorExpresion` trae su propio teclado de
+    * símbolos, y apilar tres deja el panel en un rollo imposible de usar con el
+    * pulgar. Las demás se ven como una fila que se toca para abrirla, que es el
+    * mismo gesto que ya usa la lista de ejercicios.
+    */
+   let parteAbierta = $state(0);
+
    const nodo = $derived(buscarNodo(programa, nodoId));
    const sentencia = $derived(
       nodo && nodo.kind !== 'Program' && nodo.kind !== 'SwitchCase'
@@ -40,6 +51,17 @@
    );
    const caso = $derived(nodo?.kind === 'SwitchCase' ? nodo : undefined);
    const nombres = $derived(variablesDeclaradas(programa));
+
+   /** Al seleccionar otro símbolo se vuelve a la primera parte. */
+   $effect(() => {
+      nodoId;
+      untrack(() => (parteAbierta = 0));
+   });
+
+   /** La abierta, sin salirse si se quitó una parte. */
+   function abierta(total: number): number {
+      return Math.min(parteAbierta, Math.max(0, total - 1));
+   }
 
    /** Sustituye la sentencia por una versión modificada. */
    function editar(cambio: (s: Statement) => Statement) {
@@ -52,6 +74,28 @@
 
    function esNombreValido(n: string): boolean {
       return IDENTIFICADOR.test(n.trim());
+   }
+
+   /**
+    * Sustituye los valores de un caso de `Segun`.
+    *
+    * No pasa por `editar` porque un `SwitchCase` no es una sentencia y
+    * `reemplazar` no lo alcanza: hay que buscarlo dentro de una copia del
+    * árbol.
+    */
+   function editarCaso(cambio: (pruebas: Expression[]) => Expression[]) {
+      onAplicar((p) => {
+         const copia = structuredClone(p);
+         const c = buscarNodo(copia, nodoId);
+         if (c?.kind !== 'SwitchCase') return p;
+         c.tests = cambio(c.tests).map((e) => structuredClone(e));
+         return copia;
+      });
+   }
+
+   /** Una parte de salida en blanco, lista para que el alumno la escriba. */
+   function textoVacio(): Expression {
+      return { kind: 'StringLiteral', id: nextId('str'), value: '', quote: '"' };
    }
 
    /** Convierte texto a un identificador o acceso a arreglo, si es válido. */
@@ -96,23 +140,52 @@
                ? 'Rama por descarte: se toma cuando ningún otro caso coincide.'
                : `Se toma cuando el valor es ${caso.tests.map(printExpression).join(' o ')}.`}
          </p>
-         {#if caso.tests.length === 1}
-            <EditorExpresion
-               valor={caso.tests[0]}
-               etiqueta="Valor del caso"
-               variables={nombres.variables}
-               arreglos={nombres.arreglos}
-               onCambio={(e) => {
-                  const actual = caso;
-                  if (!actual) return;
-                  onAplicar((p) => {
-                     const copia = structuredClone(p);
-                     const c = buscarNodo(copia, nodoId);
-                     if (c?.kind === 'SwitchCase') c.tests = [structuredClone(e)];
-                     return c ? copia : p;
-                  });
+         <!--
+            Un caso puede cubrir varios valores (`1, 2, 3:`). Se editan todos
+            aquí por lo mismo que las partes de una salida: si no, el alumno
+            tiene que bajar al pseudocódigo para tocar el segundo.
+            La rama por descarte no lleva valores y no admite que se le añadan:
+            darle uno la convertiría en otra cosa.
+         -->
+         {#each caso.tests as prueba, i (prueba.id)}
+            {#if i === abierta(caso.tests.length)}
+               <div class="parte">
+                  <EditorExpresion
+                     valor={prueba}
+                     etiqueta={caso.tests.length === 1
+                        ? 'Valor del caso'
+                        : `Valor ${i + 1} de ${caso.tests.length}`}
+                     variables={nombres.variables}
+                     arreglos={nombres.arreglos}
+                     onCambio={(e) =>
+                        editarCaso((pruebas) => pruebas.map((x, n) => (n === i ? e : x)))}
+                  />
+                  {#if caso.tests.length > 1}
+                     <button
+                        class="quitar"
+                        onclick={() => editarCaso((pruebas) => pruebas.filter((_, n) => n !== i))}
+                     >
+                        Quitar este valor
+                     </button>
+                  {/if}
+               </div>
+            {:else}
+               <button class="otra-parte" onclick={() => (parteAbierta = i)}>
+                  <span class="pos">{i + 1}</span>
+                  <span class="valor">{printExpression(prueba)}</span>
+               </button>
+            {/if}
+         {/each}
+         {#if caso.tests.length > 0}
+            <button
+               class="agregar"
+               onclick={() => {
+                  parteAbierta = caso.tests.length;
+                  editarCaso((pruebas) => [...pruebas, textoVacio()]);
                }}
-            />
+            >
+               + Agregar otro valor
+            </button>
          {/if}
          <button class="peligro" onclick={() => { onAplicar((p) => eliminarCaso(p, nodoId)); onCerrar(); }}>
             Quitar este caso
@@ -163,22 +236,61 @@
          <p class="nota">La app pedirá un valor por cada variable al ejecutar.</p>
 
       {:else if sentencia?.kind === 'WriteStatement'}
-         <EditorExpresion
-            valor={sentencia.values[0] ?? { kind: 'StringLiteral', id: 'tmp', value: '', quote: '"' }}
-            etiqueta="Qué mostrar"
-            variables={nombres.variables}
-            arreglos={nombres.arreglos}
-            onCambio={(v) =>
+         <!--
+            Una parte por expresión. `Escribir "Hola, ", nombre` son dos, y
+            editar solo la primera obligaba a bajar al pseudocódigo justo en el
+            caso más común de todos: un mensaje con un valor dentro.
+         -->
+         {#each sentencia.values as parte, i (parte.id)}
+            {#if i === abierta(sentencia.values.length)}
+               <div class="parte">
+                  <EditorExpresion
+                     valor={parte}
+                     etiqueta={sentencia.values.length === 1
+                        ? 'Qué mostrar'
+                        : `Parte ${i + 1} de ${sentencia.values.length}`}
+                     variables={nombres.variables}
+                     arreglos={nombres.arreglos}
+                     onCambio={(v) =>
+                        editar((s) => {
+                           const w = s as typeof sentencia;
+                           return { ...w, values: w.values.map((x, n) => (n === i ? v : x)) };
+                        })}
+                  />
+                  {#if sentencia.values.length > 1}
+                     <button
+                        class="quitar"
+                        onclick={() =>
+                           editar((s) => {
+                              const w = s as typeof sentencia;
+                              return { ...w, values: w.values.filter((_, n) => n !== i) };
+                           })}
+                     >
+                        Quitar esta parte
+                     </button>
+                  {/if}
+               </div>
+            {:else}
+               <button class="otra-parte" onclick={() => (parteAbierta = i)}>
+                  <span class="pos">{i + 1}</span>
+                  <span class="valor">{printExpression(parte)}</span>
+               </button>
+            {/if}
+         {/each}
+         <button
+            class="agregar"
+            onclick={() => {
+               parteAbierta = sentencia.values.length;
                editar((s) => {
                   const w = s as typeof sentencia;
-                  return { ...w, values: [v, ...w.values.slice(1)] };
-               })}
-         />
+                  return { ...w, values: [...w.values, textoVacio()] };
+               });
+            }}
+         >
+            + Agregar otra parte
+         </button>
          {#if sentencia.values.length > 1}
-            <p class="nota">
-               Esta salida tiene {sentencia.values.length} partes; aquí se edita la primera.
-               Las demás se editan desde el pseudocódigo.
-            </p>
+            <p class="nota">Las partes se muestran seguidas, sin separación entre ellas.</p>
          {/if}
          <label class="interruptor">
             <input
@@ -506,6 +618,76 @@
       font-size: 12px;
       color: var(--texto-tenue);
       line-height: 1.5;
+   }
+
+   /* Las partes de una salida: cada una con su editor y su forma de quitarla. */
+   .parte {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+   }
+   /* Las partes cerradas: una fila que se toca para abrirla. */
+   .otra-parte {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--borde);
+      background: var(--fondo);
+      color: var(--texto);
+      border-radius: 9px;
+      min-height: 42px;
+      padding: 0 11px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13.5px;
+   }
+   .otra-parte:hover {
+      background: var(--superficie-alta);
+   }
+   .otra-parte .pos {
+      font-family: var(--fuente-mono);
+      font-size: 11px;
+      color: var(--texto-debil);
+      flex-shrink: 0;
+   }
+   .otra-parte .valor {
+      font-family: var(--fuente-mono);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+   }
+
+   .quitar {
+      align-self: flex-start;
+      border: 0;
+      background: transparent;
+      color: var(--texto-debil);
+      font-size: 12px;
+      padding: 3px 0;
+      cursor: pointer;
+      text-decoration: underline;
+      font-family: inherit;
+   }
+   .quitar:hover {
+      color: var(--error);
+   }
+   .agregar {
+      border: 1px dashed var(--borde);
+      background: transparent;
+      color: var(--texto-tenue);
+      border-radius: 9px;
+      /* Alto cómodo para el pulgar: se toca en el panel de un móvil. */
+      min-height: 42px;
+      padding: 0 12px;
+      cursor: pointer;
+      font-size: 13.5px;
+      font-family: inherit;
+   }
+   .agregar:hover {
+      border-style: solid;
+      color: var(--texto);
    }
 
    .secundario {
