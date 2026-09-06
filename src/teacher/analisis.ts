@@ -43,6 +43,14 @@ export function formaDe(programa: Program): string {
       return nuevo;
    };
 
+   // Se ordena antes de recorrer: así el alias de cada variable se asigna sobre
+   // el orden canónico y dos programas que solo difieren en el orden de dos
+   // líneas independientes producen exactamente la misma cadena.
+   return escritorDeForma(alias).bloque(canonizar(programa).body);
+}
+
+/** La maquinaria de `formaDe`, parametrizada por cómo se nombran las variables. */
+function escritorDeForma(alias: (nombre: string) => string) {
    const expr = (e: Expression): string => {
       switch (e.kind) {
          case 'NumberLiteral':
@@ -108,7 +116,218 @@ export function formaDe(programa: Program): string {
 
    // El nombre del proceso se descarta: cambiarlo es lo primero que hace quien
    // copia, y no dice nada del algoritmo.
-   return bloque(programa.body);
+   return { expr, sentencia, bloque };
+}
+
+// ---------------------------------------------------------------------------
+// Orden canónico
+// ---------------------------------------------------------------------------
+
+/**
+ * Reordena las líneas independientes a un orden fijo.
+ *
+ * Sin esto, mover `suma <- 0` una línea más abajo bastaba para que dos trabajos
+ * dejaran de coincidir, que es la edición más barata que puede hacer quien
+ * copia. Con esto, los dos se reducen a la misma forma.
+ *
+ * Es una normalización **exacta**, no un parecido: solo se intercambian
+ * sentencias entre las que no hay ninguna dependencia, de modo que dos
+ * programas que acaban igual son de verdad el mismo algoritmo. No se toca el
+ * umbral de sospecha ni se compara «parecido con parecido»: señalar a quien sí
+ * trabajó sigue siendo peor que dejar pasar una copia.
+ *
+ * Qué NO se mueve, y por qué:
+ *  - Nada cruza un `Si`, un `Mientras`, un `Para`, un `Repetir` ni un `Segun`.
+ *    Mover una línea dentro o fuera de un bloque cambia el algoritmo.
+ *  - `Leer` y `Escribir` quedan en su orden entre sí: intercambiar dos `Leer`
+ *    cambia qué dato va a qué variable, y dos `Escribir`, lo que sale en
+ *    pantalla. Eso no es una reescritura cosmética.
+ */
+export function canonizar(programa: Program): Program {
+   const copia = structuredClone(programa);
+
+   const visitar = (nodo: Program | Statement | SwitchCase): void => {
+      for (const { block } of childBlocks(nodo)) {
+         for (const hijo of block) visitar(hijo);
+         const ordenado = ordenarBloque(block);
+         block.length = 0;
+         block.push(...ordenado);
+      }
+   };
+
+   visitar(copia);
+   return copia;
+}
+
+/** Nombres que una sentencia toca, y si su posición importa por hacer E/S. */
+function usos(s: Statement): { lee: Set<string>; escribe: Set<string>; io: boolean } {
+   const lee = new Set<string>();
+   const escribe = new Set<string>();
+
+   const enExpresion = (e: Expression): void => {
+      switch (e.kind) {
+         case 'Identifier':
+            lee.add(e.name);
+            break;
+         case 'IndexExpression':
+            lee.add(e.array.name);
+            e.indices.forEach(enExpresion);
+            break;
+         case 'BinaryExpression':
+            enExpresion(e.left);
+            enExpresion(e.right);
+            break;
+         case 'UnaryExpression':
+            enExpresion(e.argument);
+            break;
+         case 'GroupExpression':
+            enExpresion(e.expression);
+            break;
+         case 'CallExpression':
+            e.args.forEach(enExpresion);
+            break;
+      }
+   };
+
+   switch (s.kind) {
+      case 'DefineStatement':
+         // Declarar cuenta como escribir: nada que use la variable puede
+         // adelantarse a su declaración.
+         for (const n of s.names) escribe.add(n);
+         break;
+      case 'DimensionStatement':
+         for (const a of s.arrays) {
+            escribe.add(a.name);
+            a.sizes.forEach(enExpresion);
+         }
+         break;
+      case 'AssignStatement':
+         if (s.target.kind === 'Identifier') {
+            escribe.add(s.target.name);
+         } else {
+            // `a[i] <- ...` escribe el arreglo y lee los índices.
+            escribe.add(s.target.array.name);
+            s.target.indices.forEach(enExpresion);
+         }
+         enExpresion(s.value);
+         break;
+      case 'ReadStatement':
+         for (const t of s.targets) {
+            if (t.kind === 'Identifier') {
+               escribe.add(t.name);
+            } else {
+               escribe.add(t.array.name);
+               t.indices.forEach(enExpresion);
+            }
+         }
+         return { lee, escribe, io: true };
+      case 'WriteStatement':
+         s.values.forEach(enExpresion);
+         return { lee, escribe, io: true };
+      default:
+         break;
+   }
+
+   return { lee, escribe, io: false };
+}
+
+/** ¿Es una sentencia simple, de las que se pueden reordenar entre sí? */
+function esSimple(s: Statement): boolean {
+   return (
+      s.kind === 'DefineStatement' ||
+      s.kind === 'DimensionStatement' ||
+      s.kind === 'AssignStatement' ||
+      s.kind === 'ReadStatement' ||
+      s.kind === 'WriteStatement'
+   );
+}
+
+const seCruzan = (a: Set<string>, b: Set<string>): boolean => {
+   for (const x of a) if (b.has(x)) return true;
+   return false;
+};
+
+/** Ordena cada tramo de sentencias simples, respetando sus dependencias. */
+function ordenarBloque(sentencias: Statement[]): Statement[] {
+   const salida: Statement[] = [];
+   let tramo: Statement[] = [];
+
+   const cerrar = () => {
+      salida.push(...ordenarTramo(tramo));
+      tramo = [];
+   };
+
+   for (const s of sentencias) {
+      if (esSimple(s)) {
+         tramo.push(s);
+      } else {
+         // Las estructuras de control son barreras: nada las cruza.
+         cerrar();
+         salida.push(s);
+      }
+   }
+   cerrar();
+
+   return salida;
+}
+
+/**
+ * Orden topológico determinista de un tramo de sentencias simples.
+ *
+ * Entre las disponibles se toma siempre la de forma más pequeña, para que dos
+ * programas equivalentes lleguen al mismo orden aunque partieran de otro. El
+ * desempate usa una forma **sin identidad de variables**, que no depende del
+ * orden y por tanto no se muerde la cola con el alias de `formaDe`.
+ */
+function ordenarTramo(tramo: Statement[]): Statement[] {
+   if (tramo.length < 2) return [...tramo];
+
+   const escritor = escritorDeForma(() => 'v');
+   const info = tramo.map((s) => ({ s, ...usos(s), clave: escritor.sentencia(s) }));
+
+   /** `antes[j]` = índices que tienen que salir antes que `j`. */
+   const antes = info.map(() => new Set<number>());
+   for (let i = 0; i < info.length; i++) {
+      for (let j = i + 1; j < info.length; j++) {
+         const a = info[i];
+         const b = info[j];
+         const dependen =
+            (a.io && b.io) ||
+            seCruzan(a.escribe, b.lee) ||
+            seCruzan(a.escribe, b.escribe) ||
+            seCruzan(a.lee, b.escribe);
+         if (dependen) antes[j].add(i);
+      }
+   }
+
+   const salida: Statement[] = [];
+   const puestos = new Set<number>();
+
+   while (puestos.size < info.length) {
+      let elegido = -1;
+      for (let i = 0; i < info.length; i++) {
+         if (puestos.has(i)) continue;
+         let libre = true;
+         for (const p of antes[i]) {
+            if (!puestos.has(p)) {
+               libre = false;
+               break;
+            }
+         }
+         if (!libre) continue;
+         if (elegido === -1 || info[i].clave < info[elegido].clave) elegido = i;
+      }
+
+      // No puede haber ciclos —las aristas van siempre de menor a mayor
+      // índice—, pero si algo saliera mal es preferible devolver el orden
+      // original que quedarse dando vueltas.
+      if (elegido === -1) return [...tramo];
+
+      puestos.add(elegido);
+      salida.push(info[elegido].s);
+   }
+
+   return salida;
 }
 
 /** Cuántas sentencias tiene el algoritmo, para no comparar cosas triviales. */
@@ -116,9 +335,9 @@ export function tamano(programa: Program): number {
    let total = 0;
    const visitar = (nodo: Program | Statement | SwitchCase): void => {
       if (nodo.kind !== 'Program' && nodo.kind !== 'SwitchCase') total += 1;
-      if (nodo.kind === 'SwitchStatement') {
-         for (const c of nodo.cases) visitar(c);
-      }
+      // Sin recorrer aparte los casos de un `Segun`: `childBlocks` ya devuelve
+      // sus cuerpos, y hacer las dos cosas contaba dos veces todo lo que va
+      // dentro de un `Segun`.
       for (const { block } of childBlocks(nodo)) {
          for (const hijo of block) visitar(hijo);
       }

@@ -81,6 +81,89 @@ FinProceso`;
       expect(forma(comentado)).toBe(forma(ORIGINAL));
    });
 
+   it('mover una línea independiente no disfraza la copia', () => {
+      // La edición más barata que puede hacer quien copia: bajar una línea que
+      // no depende de nada.
+      const movido = `Proceso promedio
+   Definir i, n Como Entero
+   Definir suma Como Real
+   Leer n
+   suma <- 0
+   Para i <- 1 Hasta n Hacer
+      Escribir "Dame un dato"
+      Leer suma
+   FinPara
+   Escribir "El promedio es ", suma / n
+FinProceso`;
+      expect(forma(movido)).toBe(forma(ORIGINAL));
+   });
+
+   it('reordenar declaraciones tampoco', () => {
+      const otroOrden = ORIGINAL.replace(
+         'Definir i, n Como Entero\n   Definir suma Como Real',
+         'Definir suma Como Real\n   Definir i, n Como Entero',
+      );
+      expect(forma(otroOrden)).toBe(forma(ORIGINAL));
+   });
+
+   it('intercambiar dos Leer SÍ cambia la forma', () => {
+      // No es cosmético: cambia qué dato va a qué variable.
+      const a = `Proceso p
+   Definir x, y Como Entero
+   Leer x
+   Leer y
+   Escribir x - y
+FinProceso`;
+      const b = a.replace('Leer x\n   Leer y', 'Leer y\n   Leer x');
+      expect(forma(b)).not.toBe(forma(a));
+   });
+
+   it('intercambiar dos Escribir SÍ cambia la forma', () => {
+      const a = `Proceso p
+   Definir x Como Entero
+   x <- 1
+   Escribir "uno"
+   Escribir x
+FinProceso`;
+      const b = a.replace('Escribir "uno"\n   Escribir x', 'Escribir x\n   Escribir "uno"');
+      expect(forma(b)).not.toBe(forma(a));
+   });
+
+   it('mover una línea de la que otra depende SÍ cambia la forma', () => {
+      const a = `Proceso p
+   Definir x, y Como Entero
+   x <- 5
+   y <- x + 1
+   Escribir y
+FinProceso`;
+      // Usar `y` antes de calcularlo es otro algoritmo, no el mismo reordenado.
+      const b = `Proceso p
+   Definir x, y Como Entero
+   y <- x + 1
+   x <- 5
+   Escribir y
+FinProceso`;
+      expect(forma(b)).not.toBe(forma(a));
+   });
+
+   it('sacar una línea de un bucle SÍ cambia la forma', () => {
+      const dentro = `Proceso p
+   Definir i, s Como Entero
+   Para i <- 1 Hasta 10 Hacer
+      s <- s + i
+   FinPara
+   Escribir s
+FinProceso`;
+      const fuera = `Proceso p
+   Definir i, s Como Entero
+   s <- s + i
+   Para i <- 1 Hasta 10 Hacer
+   FinPara
+   Escribir s
+FinProceso`;
+      expect(forma(fuera)).not.toBe(forma(dentro));
+   });
+
    it('cambiar un operador SÍ cambia la forma', () => {
       expect(forma(ORIGINAL.replace('suma / n', 'suma * n'))).not.toBe(forma(ORIGINAL));
    });
@@ -126,6 +209,24 @@ FinProceso`;
       const { program } = parse(ORIGINAL);
       // 3 definiciones/asignaciones + leer + para + 2 dentro + escribir final.
       expect(tamano(program)).toBe(8);
+   });
+
+   it('el tamaño no cuenta dos veces lo que va dentro de un Segun', () => {
+      const { program } = parse(`Proceso p
+   Definir n Como Entero
+   Leer n
+   Segun n Hacer
+      1:
+         Escribir "a"
+         Escribir "b"
+      De Otro Modo:
+         Escribir "c"
+   FinSegun
+FinProceso`);
+      // Definir, Leer, Segun y tres Escribir. Contarlas de más inflaba el
+      // tamaño de cualquier algoritmo con un `Segun` y lo hacía pasar el
+      // umbral de comparación sin merecerlo.
+      expect(tamano(program)).toBe(6);
    });
 });
 

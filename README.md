@@ -399,6 +399,17 @@ filas seguidas no dejan ver cómo le fue a un alumno concreto.
 La unidad de comparación es el **ejercicio**, no la entrega: comparar cuadernos
 enteros solo detectaría a quien copió los ocho.
 
+Antes de comparar, la forma se lleva a un **orden canónico**: dentro de cada
+bloque, las sentencias entre las que no hay ninguna dependencia se ordenan
+siempre igual. Sin eso, bajar `suma <- 0` una línea —la edición más barata que
+puede hacer quien copia— bastaba para dejar de coincidir.
+
+Es una normalización exacta y no un parecido, así que no añade falsos
+positivos: dos programas que acaban con la misma forma son de verdad el mismo
+algoritmo. Nada cruza un `Si`, un `Para` ni un `Segun`, y `Leer` y `Escribir`
+conservan su orden entre sí: intercambiar dos `Leer` cambia qué dato va a qué
+variable, y eso no es una edición cosmética.
+
 Sobre el tono: la interfaz dice «revisar», nunca «copia». Los umbrales de la
 bitácora son **deliberadamente laxos** — es preferible dejar pasar una copia que
 señalar a quien sí trabajó — y los algoritmos de menos de 6 sentencias no se
@@ -513,9 +524,12 @@ Dos avisos del manual que conviene no descubrir tarde:
   cancelable y eso es todo lo que se necesita. Si se migra, hay que comprobar
   que escribir el texto desde el código **no** dispara su `oninput`: de eso
   depende que las dos vías de edición no se muerdan la cola.
-- La comparación de algoritmos es exacta sobre la forma: detecta renombrados y
-  cambios de mensaje, pero no una reescritura parcial. Un alumno que cambie el
-  orden de dos sentencias independientes ya no coincide.
+- La comparación es exacta sobre la forma canónica: detecta renombrados,
+  cambios de mensaje y reordenamientos sin efecto, pero no una **reescritura
+  parcial**. Quien cambie un `Mientras` por un `Para`, o parta una expresión en
+  dos líneas, deja de coincidir. Buscar parecidos en vez de igualdades traería
+  falsos positivos, y en un grupo que resuelve todo el mismo ejercicio eso
+  señalaría a quien sí trabajó: no se hará sin medir antes cuánto se dispara.
 
 ---
 
