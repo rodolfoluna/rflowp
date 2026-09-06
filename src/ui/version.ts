@@ -5,4 +5,4 @@
  * sale raro, y poder avisar con precisión si un archivo viene de una versión
  * que esta no sabe leer.
  */
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';

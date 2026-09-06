@@ -70,14 +70,19 @@ bundle tiene rendimientos decrecientes y cuesta accesibilidad.
 | 4 | Identidad local, OPFS, guardar/cargar `.algx` | **Hecho** |
 | 5 | Cifrado y modo profesor | **Hecho** |
 | 6 | Anti-copia, bitácora y revisión de entregas | **Hecho** |
+| 7 | Cuadernos de varios ejercicios y plantillas `.algxp` | **Hecho** |
 
 Ahora mismo la app **edita en las dos direcciones**: se escribe pseudocódigo y
 el diagrama se redibuja, o se arma el diagrama tocando símbolos y el
 pseudocódigo se regenera. Ejecuta, guarda en el dispositivo, y **cifra** lo que
 exporta de modo que solo el alumno y su profesor puedan abrirlo.
 
-Las seis fases del plan están hechas. Lo que falta antes de usarla en un curso
-es probarla **en teléfonos reales** (ver el final de este documento).
+Un archivo es un **cuaderno**: lleva varios ejercicios y se entrega una sola
+vez. El profesor reparte la tarea como **plantilla**, que es lo que enlaza el
+ejercicio 3 de un alumno con el 3 de otro al revisar.
+
+Las fases del plan están hechas. Lo que falta antes de usarla en un curso es
+probarla **en teléfonos reales** (ver el final de este documento).
 
 ---
 
