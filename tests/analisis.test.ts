@@ -12,7 +12,7 @@ import {
    buscarCoincidencias,
    formaDe,
    tamano,
-   type EntregaParaAnalizar,
+   type EjercicioParaAnalizar,
 } from '../src/teacher/analisis';
 import { Cronista, duracion, verosimilitud } from '../src/guard/bitacora.svelte';
 import { Guardas } from '../src/guard/guardas.svelte';
@@ -132,10 +132,16 @@ FinProceso`;
 // ---------------------------------------------------------------------------
 
 describe('coincidencias en un lote', () => {
-   const base = (extra: Partial<EntregaParaAnalizar>): EntregaParaAnalizar => ({
-      id: 'x',
+   /**
+    * La unidad de comparación es el EJERCICIO: con cuadernos de ocho, comparar
+    * archivos enteros solo detectaría a quien copió los ocho.
+    */
+   const base = (extra: Partial<EjercicioParaAnalizar>): EjercicioParaAnalizar => ({
+      entregaId: 'x',
+      ejercicioId: 'ej1',
       numeroControl: '1',
       nombre: 'Alumno',
+      nombreEjercicio: 'Ejercicio 1',
       deviceId: 'd1',
       tamano: 10,
       ...extra,
@@ -143,28 +149,29 @@ describe('coincidencias en un lote', () => {
 
    it('detecta dos alumnos con la misma llave de firma', () => {
       const c = buscarCoincidencias([
-         base({ id: 'a', numeroControl: '111', nombre: 'Ana', huella: 'HUELLA1' }),
-         base({ id: 'b', numeroControl: '222', nombre: 'Luis', huella: 'HUELLA1' }),
+         base({ entregaId: 'a', numeroControl: '111', nombre: 'Ana', huella: 'HUELLA1' }),
+         base({ entregaId: 'b', numeroControl: '222', nombre: 'Luis', huella: 'HUELLA1' }),
       ]);
 
       expect(c.length).toBe(1);
       expect(c[0].tipo).toBe('instalacion');
-      expect(c[0].alumnos.sort()).toEqual(['Ana', 'Luis']);
+      expect(c[0].implicados.map((i) => i.alumno).sort()).toEqual(['Ana', 'Luis']);
+      expect(c[0].entregas.sort()).toEqual(['a', 'b']);
    });
 
    it('NO señala dos entregas del mismo alumno', () => {
       // Entregar dos versiones del propio trabajo es normal.
       const c = buscarCoincidencias([
-         base({ id: 'a', numeroControl: '111', nombre: 'Ana', huella: 'H' }),
-         base({ id: 'b', numeroControl: '111', nombre: 'Ana', huella: 'H' }),
+         base({ entregaId: 'a', numeroControl: '111', nombre: 'Ana', huella: 'H' }),
+         base({ entregaId: 'b', numeroControl: '111', nombre: 'Ana', huella: 'H' }),
       ]);
       expect(c).toEqual([]);
    });
 
    it('detecta el mismo algoritmo con variables renombradas', () => {
       const c = buscarCoincidencias([
-         base({ id: 'a', numeroControl: '111', nombre: 'Ana', huella: 'H1', forma: 'FORMA-X' }),
-         base({ id: 'b', numeroControl: '222', nombre: 'Luis', huella: 'H2', forma: 'FORMA-X' }),
+         base({ entregaId: 'a', numeroControl: '111', nombre: 'Ana', huella: 'H1', forma: 'FORMA-X' }),
+         base({ entregaId: 'b', numeroControl: '222', nombre: 'Luis', huella: 'H2', forma: 'FORMA-X' }),
       ]);
 
       expect(c.length).toBe(1);
@@ -174,8 +181,8 @@ describe('coincidencias en un lote', () => {
    it('NO señala algoritmos triviales aunque coincidan', () => {
       // «Lee dos números y súmalos» sale igual en todo el grupo.
       const c = buscarCoincidencias([
-         base({ id: 'a', numeroControl: '111', nombre: 'Ana', huella: 'H1', forma: 'F', tamano: 3 }),
-         base({ id: 'b', numeroControl: '222', nombre: 'Luis', huella: 'H2', forma: 'F', tamano: 3 }),
+         base({ entregaId: 'a', numeroControl: '111', nombre: 'Ana', huella: 'H1', forma: 'F', tamano: 3 }),
+         base({ entregaId: 'b', numeroControl: '222', nombre: 'Luis', huella: 'H2', forma: 'F', tamano: 3 }),
       ]);
       expect(c).toEqual([]);
    });
@@ -183,8 +190,8 @@ describe('coincidencias en un lote', () => {
    it('no repite el mismo grupo por dos motivos', () => {
       // Misma instalación Y misma forma: se reporta una vez, por lo más fuerte.
       const c = buscarCoincidencias([
-         base({ id: 'a', numeroControl: '111', nombre: 'Ana', huella: 'H', forma: 'F' }),
-         base({ id: 'b', numeroControl: '222', nombre: 'Luis', huella: 'H', forma: 'F' }),
+         base({ entregaId: 'a', numeroControl: '111', nombre: 'Ana', huella: 'H', forma: 'F' }),
+         base({ entregaId: 'b', numeroControl: '222', nombre: 'Luis', huella: 'H', forma: 'F' }),
       ]);
       expect(c.length).toBe(1);
       expect(c[0].tipo).toBe('instalacion');
@@ -192,16 +199,16 @@ describe('coincidencias en un lote', () => {
 
    it('un lote limpio no produce señales', () => {
       const c = buscarCoincidencias([
-         base({ id: 'a', numeroControl: '111', nombre: 'Ana', huella: 'H1', forma: 'F1', deviceId: 'd1' }),
-         base({ id: 'b', numeroControl: '222', nombre: 'Luis', huella: 'H2', forma: 'F2', deviceId: 'd2' }),
+         base({ entregaId: 'a', numeroControl: '111', nombre: 'Ana', huella: 'H1', forma: 'F1', deviceId: 'd1' }),
+         base({ entregaId: 'b', numeroControl: '222', nombre: 'Luis', huella: 'H2', forma: 'F2', deviceId: 'd2' }),
       ]);
       expect(c).toEqual([]);
    });
 
    it('detecta por deviceId cuando el archivo no está cifrado', () => {
       const c = buscarCoincidencias([
-         base({ id: 'a', numeroControl: '111', nombre: 'Ana', deviceId: 'mismo' }),
-         base({ id: 'b', numeroControl: '222', nombre: 'Luis', deviceId: 'mismo' }),
+         base({ entregaId: 'a', numeroControl: '111', nombre: 'Ana', deviceId: 'mismo' }),
+         base({ entregaId: 'b', numeroControl: '222', nombre: 'Luis', deviceId: 'mismo' }),
       ]);
       expect(c[0]?.tipo).toBe('instalacion');
    });

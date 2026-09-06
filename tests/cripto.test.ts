@@ -23,7 +23,15 @@ import { huellaDeFirma } from '../src/crypto/sobre';
 import { HUELLA_INCLUIDA, LLAVE_INCLUIDA } from '../src/crypto/llave-del-curso';
 import { almacenArchivosEnMemoria } from '../src/file/almacenes';
 import { Biblioteca, type ContextoCripto } from '../src/file/biblioteca.svelte';
-import { deserializar, ErrorArchivo } from '../src/file/algx';
+import {
+   bitacoraEjercicioNueva,
+   bitacoraNueva,
+   deserializar,
+   ErrorArchivo,
+   FORMATO,
+   type Contenido,
+} from '../src/file/algx';
+import type { Program } from '../src/core/ast';
 import type { Identidad } from '../src/identity/identidad';
 
 const FUENTE = `Proceso p
@@ -33,6 +41,20 @@ const FUENTE = `Proceso p
 FinProceso`;
 
 const programa = () => parse(FUENTE).program;
+
+/** Cuaderno de prueba a partir de uno o varios programas. */
+function cuadernoDe(...programas: Program[]): Contenido {
+   return {
+      ejercicios: programas.map((programa, i) => ({
+         id: `e${i + 1}`,
+         nombre: `Ejercicio ${i + 1}`,
+         programa,
+         bitacora: bitacoraEjercicioNueva(),
+      })),
+      bitacora: bitacoraNueva(),
+   };
+}
+
 
 function identidad(nombre: string, control: string, device: string): Identidad {
    return {
@@ -68,7 +90,7 @@ describe('quién puede abrir qué', () => {
       const ana = await instalacion(prof.publica);
 
       const id = await ana.bib.guardar({
-         programa: programa(),
+         contenido: cuadernoDe(programa()),
          titulo: 'Mi tarea',
          identidad: ANA,
       });
@@ -76,7 +98,7 @@ describe('quién puede abrir qué', () => {
       const abierto = await ana.bib.abrir(id);
       expect(abierto.como).toBe('alumno');
       expect(abierto.firmaValida).toBe(true);
-      expect(print(abierto.contenido.programa)).toBe(FUENTE);
+      expect(print(abierto.contenido.ejercicios[0].programa)).toBe(FUENTE);
    });
 
    it('otro alumno NO puede abrir el archivo, aunque lo tenga en su dispositivo', async () => {
@@ -85,7 +107,7 @@ describe('quién puede abrir qué', () => {
       const luis = await instalacion(prof.publica);
 
       const id = await ana.bib.guardar({
-         programa: programa(),
+         contenido: cuadernoDe(programa()),
          titulo: 'Mi tarea',
          identidad: ANA,
       });
@@ -101,8 +123,8 @@ describe('quién puede abrir qué', () => {
       const ana = await instalacion(prof.publica);
       const luis = await instalacion(prof.publica);
 
-      const idAna = await ana.bib.guardar({ programa: programa(), titulo: 'A', identidad: ANA });
-      const idLuis = await luis.bib.guardar({ programa: programa(), titulo: 'L', identidad: LUIS });
+      const idAna = await ana.bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'A', identidad: ANA });
+      const idLuis = await luis.bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'L', identidad: LUIS });
 
       // El profesor: sin llaves de alumno, con su privada.
       const almacenProf = almacenArchivosEnMemoria();
@@ -124,7 +146,7 @@ describe('quién puede abrir qué', () => {
 
          expect(abierto.como).toBe('profesor');
          expect(abierto.firmaValida).toBe(true);
-         expect(print(abierto.contenido.programa)).toBe(FUENTE);
+         expect(print(abierto.contenido.ejercicios[0].programa)).toBe(FUENTE);
       }
    });
 
@@ -133,7 +155,7 @@ describe('quién puede abrir qué', () => {
       const profB = await generarLlavesProfesor();
       const ana = await instalacion(profA.publica);
 
-      const id = await ana.bib.guardar({ programa: programa(), titulo: 'A', identidad: ANA });
+      const id = await ana.bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'A', identidad: ANA });
       const { texto } = await ana.bib.paraExportar(id);
 
       const otro = new Biblioteca(
@@ -150,7 +172,7 @@ describe('quién puede abrir qué', () => {
       // Caso importante: si el alumno guarda antes de importar la llave del
       // curso, ese archivo queda solo para él.
       const ana = await instalacion(null);
-      const id = await ana.bib.guardar({ programa: programa(), titulo: 'A', identidad: ANA });
+      const id = await ana.bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'A', identidad: ANA });
       const { texto } = await ana.bib.paraExportar(id);
 
       const { carga } = deserializar(texto);
@@ -184,7 +206,7 @@ describe('borrar los datos deja los archivos ilegibles para el alumno', () => {
       };
       const bib = new Biblioteca(almacen, '0.5.0', () => contexto, () => 'tarea.algx');
 
-      const id = await bib.guardar({ programa: programa(), titulo: 'Tarea', identidad: ANA });
+      const id = await bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'Tarea', identidad: ANA });
       expect((await bib.abrir(id)).como).toBe('alumno');
 
       const { texto } = await bib.paraExportar(id);
@@ -221,7 +243,7 @@ describe('integridad y firma', () => {
       const prof = await generarLlavesProfesor();
       const ana = await instalacion(prof.publica);
       const id = await ana.bib.guardar({
-         programa: programa(),
+         contenido: cuadernoDe(programa()),
          titulo: 'Tarea',
          identidad: ANA,
       });
@@ -281,8 +303,8 @@ describe('huellas: cómo se detecta la copia', () => {
       const prof = await generarLlavesProfesor();
       const ana = await instalacion(prof.publica);
 
-      await ana.bib.guardar({ programa: programa(), titulo: 'Tarea 1', identidad: ANA });
-      await ana.bib.guardar({ programa: programa(), titulo: 'Tarea 2', identidad: ANA });
+      await ana.bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'Tarea 1', identidad: ANA });
+      await ana.bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'Tarea 2', identidad: ANA });
 
       const huellas = ana.bib.archivos.map((a) => a.huella);
       expect(huellas[0]).toBeDefined();
@@ -304,7 +326,7 @@ describe('huellas: cómo se detecta la copia', () => {
       const prof = await generarLlavesProfesor();
       const ana = await instalacion(prof.publica);
 
-      const id = await ana.bib.guardar({ programa: programa(), titulo: 'Tarea', identidad: ANA });
+      const id = await ana.bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'Tarea', identidad: ANA });
       const { texto } = await ana.bib.paraExportar(id);
 
       const bruto = JSON.parse(texto);
@@ -335,7 +357,7 @@ describe('llave incluida con la app', () => {
       const ana = await instalacion(publica);
 
       const id = await ana.bib.guardar({
-         programa: programa(),
+         contenido: cuadernoDe(programa()),
          titulo: 'Con la llave incluida',
          identidad: ANA,
       });
@@ -372,9 +394,9 @@ describe('llave incluida con la app', () => {
          () => `t${Math.random()}.algx`,
       );
 
-      await bib.guardar({ programa: programa(), titulo: 'Antes', identidad: ANA });
+      await bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'Antes', identidad: ANA });
       publicaActual = prof.publica;
-      const despues = await bib.guardar({ programa: programa(), titulo: 'Después', identidad: ANA });
+      const despues = await bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'Después', identidad: ANA });
 
       const bibProf = new Biblioteca(
          almacenArchivosEnMemoria(),
@@ -405,7 +427,7 @@ describe('llaves del profesor', () => {
 
       // El ciclo completo con las llaves reimportadas.
       const ana = await instalacion(publica);
-      const id = await ana.bib.guardar({ programa: programa(), titulo: 'T', identidad: ANA });
+      const id = await ana.bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'T', identidad: ANA });
       const { texto } = await ana.bib.paraExportar(id);
 
       const bibProf = new Biblioteca(
@@ -445,12 +467,12 @@ describe('propiedades del sobre', () => {
       const ana = await instalacion(prof.publica);
 
       const a = await ana.bib.construir({
-         programa: programa(),
+         contenido: cuadernoDe(programa()),
          titulo: 'T',
          identidad: ANA,
       });
       const b = await ana.bib.construir({
-         programa: programa(),
+         contenido: cuadernoDe(programa()),
          titulo: 'T',
          identidad: ANA,
       });
@@ -469,9 +491,9 @@ describe('propiedades del sobre', () => {
       const prof = await generarLlavesProfesor();
       const ana = await instalacion(prof.publica);
       const { texto } = await ana.bib.construir({
-         programa: parse(`Proceso secreto
+         contenido: cuadernoDe(parse(`Proceso secreto
    Escribir "contrasena_del_examen"
-FinProceso`).program,
+FinProceso`).program),
          titulo: 'T',
          identidad: ANA,
       });
@@ -485,7 +507,7 @@ FinProceso`).program,
       const prof = await generarLlavesProfesor();
       const ana = await instalacion(prof.publica);
       const { texto } = await ana.bib.construir({
-         programa: programa(),
+         contenido: cuadernoDe(programa()),
          titulo: 'Tarea 4',
          identidad: ANA,
       });
@@ -496,33 +518,10 @@ FinProceso`).program,
       expect(bruto.alg).toBe('A256GCM+ECIES-P256');
    });
 
-   it('los archivos sin cifrar de versiones anteriores se siguen abriendo', async () => {
-      const prof = await generarLlavesProfesor();
-      const ana = await instalacion(prof.publica);
-
-      const viejo = JSON.stringify({
-         magic: 'RFLOWP',
-         fmt: 'algx/1',
-         alg: 'ninguno',
-         autor: { numeroControl: '20161234', nombre: 'Ana López' },
-         deviceId: 'dispositivo-ana',
-         titulo: 'De antes',
-         creado: '2026-01-01T00:00:00.000Z',
-         modificado: '2026-01-01T00:00:00.000Z',
-         appVersion: '0.4.0',
-         contenido: { programa: programa() },
-      });
-
-      const abierto = await ana.bib.interpretar(viejo);
-      expect(abierto.como).toBe('sin-cifrar');
-      expect(abierto.firmaValida).toBe(false);
-      expect(print(abierto.contenido.programa)).toBe(FUENTE);
-   });
-
    it('rechaza un esquema de protección desconocido', () => {
       const raro = JSON.stringify({
          magic: 'RFLOWP',
-         fmt: 'algx/1',
+         fmt: FORMATO,
          alg: 'ALGO-DEL-FUTURO',
          autor: { numeroControl: '1', nombre: 'x' },
       });

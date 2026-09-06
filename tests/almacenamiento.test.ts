@@ -27,9 +27,11 @@ import {
    nombreSugerido,
    serializarEnClaro,
    bitacoraNueva,
+   bitacoraEjercicioNueva,
    encabezadoCanonico,
    type Contenido,
 } from '../src/file/algx';
+import type { Program } from '../src/core/ast';
 import {
    almacenArchivosEnMemoria,
    almacenIdentidadEnMemoria,
@@ -44,6 +46,19 @@ const FUENTE = `Proceso p
 FinProceso`;
 
 const programa = () => parse(FUENTE).program;
+
+/** Cuaderno de prueba a partir de uno o varios programas. */
+function cuadernoDe(...programas: Program[]): Contenido {
+   return {
+      ejercicios: programas.map((p, i) => ({
+         id: `e${i + 1}`,
+         nombre: `Ejercicio ${i + 1}`,
+         programa: p,
+         bitacora: bitacoraEjercicioNueva(),
+      })),
+      bitacora: bitacoraNueva(),
+   };
+}
 
 const IDENTIDAD: Identidad = {
    numeroControl: '20161234',
@@ -142,10 +157,7 @@ describe('contenedor .algx', () => {
          ahora: () => new Date('2026-03-01T12:00:00Z'),
       });
 
-   const contenido = (): Contenido => ({
-      programa: programa(),
-      bitacora: bitacoraNueva(),
-   });
+   const contenido = (): Contenido => cuadernoDe(programa());
 
    it('sobrevive al ciclo de escribir y leer', () => {
       const e = encabezado();
@@ -156,7 +168,7 @@ describe('contenedor .algx', () => {
       expect(leido.encabezado.deviceId).toBe('dispositivo-1');
       expect(leido.carga.cifrado).toBe(false);
       if (!leido.carga.cifrado) {
-         expect(print(leido.carga.contenido.programa)).toBe(FUENTE);
+         expect(print(leido.carga.contenido.ejercicios[0].programa)).toBe(FUENTE);
       }
    });
 
@@ -171,13 +183,13 @@ describe('contenedor .algx', () => {
       expect(() => deserializar(JSON.stringify(bruto))).toThrow(/otra versión/);
    });
 
-   it('rechaza un archivo sin programa', () => {
+   it('rechaza un cuaderno sin ejercicios', () => {
       const bruto = JSON.parse(serializarEnClaro(encabezado(), contenido()));
-      delete bruto.contenido.programa;
+      bruto.contenido.ejercicios = [];
       expect(() => deserializar(JSON.stringify(bruto))).toThrow(/incompleto|dañado/);
    });
 
-   it('rellena la bitácora si el archivo es viejo y no la trae', () => {
+   it('rellena la bitácora si el archivo no la trae', () => {
       const bruto = JSON.parse(serializarEnClaro(encabezado(), contenido()));
       delete bruto.contenido.bitacora;
       const leido = deserializar(JSON.stringify(bruto));
@@ -242,7 +254,7 @@ describe('biblioteca', () => {
 
    it('guarda y vuelve a listar', async () => {
       const { bib } = await nueva();
-      await bib.guardar({ programa: programa(), titulo: 'Mi algoritmo', identidad: IDENTIDAD });
+      await bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'Mi algoritmo', identidad: IDENTIDAD });
 
       expect(bib.archivos.length).toBe(1);
       expect(bib.archivos[0].titulo).toBe('Mi algoritmo');
@@ -254,7 +266,7 @@ describe('biblioteca', () => {
       const { bib } = await nueva();
       const original = programa();
       const id = await bib.guardar({
-         programa: original,
+         contenido: cuadernoDe(original),
          titulo: 'Mi algoritmo',
          identidad: IDENTIDAD,
       });
@@ -262,21 +274,21 @@ describe('biblioteca', () => {
       const archivo = await bib.abrir(id);
       // Se compara el pseudocódigo, no el árbol crudo: los `id` de nodo son
       // únicos por sesión y no tiene sentido exigir que coincidan.
-      expect(print(archivo.contenido.programa)).toBe(print(original));
-      expect(print(archivo.contenido.programa)).toBe(FUENTE);
+      expect(print(archivo.contenido.ejercicios[0].programa)).toBe(print(original));
+      expect(print(archivo.contenido.ejercicios[0].programa)).toBe(FUENTE);
    });
 
    it('sobrescribir conserva la fecha de creación original', async () => {
       const { bib } = await nueva();
       const id = await bib.guardar({
-         programa: programa(),
+         contenido: cuadernoDe(programa()),
          titulo: 'v1',
          identidad: IDENTIDAD,
       });
       const creadoOriginal = (await bib.abrir(id)).encabezado.creado;
 
       await new Promise((r) => setTimeout(r, 5));
-      await bib.guardar({ programa: programa(), titulo: 'v2', identidad: IDENTIDAD, id });
+      await bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'v2', identidad: IDENTIDAD, id });
 
       const despues = await bib.abrir(id);
       // La antigüedad del trabajo es parte de la evidencia; no debe reiniciarse.
@@ -287,14 +299,14 @@ describe('biblioteca', () => {
 
    it('un título vacío no deja el archivo sin nombre', async () => {
       const { bib } = await nueva();
-      await bib.guardar({ programa: programa(), titulo: '   ', identidad: IDENTIDAD });
+      await bib.guardar({ contenido: cuadernoDe(programa()), titulo: '   ', identidad: IDENTIDAD });
       expect(bib.archivos[0].titulo).toBe('Sin título');
    });
 
    it('borra un algoritmo', async () => {
       const { bib } = await nueva();
       const id = await bib.guardar({
-         programa: programa(),
+         contenido: cuadernoDe(programa()),
          titulo: 'Temporal',
          identidad: IDENTIDAD,
       });
@@ -306,9 +318,9 @@ describe('biblioteca', () => {
 
    it('lista lo más reciente primero', async () => {
       const { bib } = await nueva();
-      await bib.guardar({ programa: programa(), titulo: 'primero', identidad: IDENTIDAD });
+      await bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'primero', identidad: IDENTIDAD });
       await new Promise((r) => setTimeout(r, 5));
-      await bib.guardar({ programa: programa(), titulo: 'segundo', identidad: IDENTIDAD });
+      await bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'segundo', identidad: IDENTIDAD });
 
       expect(bib.archivos.map((a) => a.titulo)).toEqual(['segundo', 'primero']);
    });
@@ -316,7 +328,7 @@ describe('biblioteca', () => {
    it('marca como ajeno lo que vino de otra instalación', async () => {
       const { bib } = await nueva();
       const otro: Identidad = { ...IDENTIDAD, deviceId: 'otro-dispositivo', nombre: 'Luis Ruiz' };
-      await bib.guardar({ programa: programa(), titulo: 'De Luis', identidad: otro });
+      await bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'De Luis', identidad: otro });
 
       await bib.refrescar(IDENTIDAD.deviceId);
       expect(bib.archivos[0].propio).toBe(false);
@@ -326,7 +338,7 @@ describe('biblioteca', () => {
    it('importa un .algx válido', async () => {
       const origen = await nueva();
       const id = await origen.bib.guardar({
-         programa: programa(),
+         contenido: cuadernoDe(programa()),
          titulo: 'Compartido',
          identidad: IDENTIDAD,
       });
@@ -345,7 +357,7 @@ describe('biblioteca', () => {
 
    it('un archivo dañado no oculta a los demás', async () => {
       const { bib, almacen } = await nueva();
-      await bib.guardar({ programa: programa(), titulo: 'Bueno', identidad: IDENTIDAD });
+      await bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'Bueno', identidad: IDENTIDAD });
       await almacen.guardar('roto.algx', '{{{ esto no es json');
 
       await bib.refrescar();
@@ -355,7 +367,7 @@ describe('biblioteca', () => {
    it('exportar propone un nombre con el número de control', async () => {
       const { bib } = await nueva();
       const id = await bib.guardar({
-         programa: programa(),
+         contenido: cuadernoDe(programa()),
          titulo: 'Tarea 3',
          identidad: IDENTIDAD,
       });
@@ -364,29 +376,60 @@ describe('biblioteca', () => {
       expect(nombre).toBe('20161234-Tarea_3.algx');
    });
 
-   it('el borrador guarda el texto tal cual, aunque no compile', async () => {
+   it('el borrador guarda el texto de cada ejercicio, aunque no compile', async () => {
       const { bib } = await nueva();
       const aMedias = `Proceso p
    Si a > `;
 
-      await bib.guardarBorrador({ texto: aMedias, titulo: 'En curso' });
-      const leido = await bib.leerBorrador();
+      await bib.guardarBorrador({
+         titulo: 'En curso',
+         cuaderno: {
+            activoId: 'e1',
+            ejercicios: [
+               { id: 'e1', nombre: 'Uno', texto: aMedias, bitacora: bitacoraEjercicioNueva() },
+               { id: 'e2', nombre: 'Dos', texto: FUENTE, bitacora: bitacoraEjercicioNueva() },
+            ],
+         },
+      });
 
       // Se guarda el TEXTO y no el árbol justamente por esto: lo que hay que
       // recuperar es lo que el alumno tenía escrito, compile o no.
-      expect(leido).toEqual({ texto: aMedias, titulo: 'En curso', archivoId: undefined });
+      const leido = await bib.leerBorrador();
+      expect(leido?.cuaderno.ejercicios[0].texto).toBe(aMedias);
+      expect(leido?.cuaderno.ejercicios[1].texto).toBe(FUENTE);
    });
 
-   it('el borrador recuerda a qué archivo pertenecía', async () => {
+   it('el borrador recuerda a qué archivo pertenecía y qué ejercicio estaba abierto', async () => {
       const { bib } = await nueva();
-      await bib.guardarBorrador({ texto: FUENTE, titulo: 'Tarea', archivoId: 'abc.algx' });
-      expect((await bib.leerBorrador())?.archivoId).toBe('abc.algx');
+      await bib.guardarBorrador({
+         titulo: 'Tarea',
+         archivoId: 'abc.algx',
+         cuaderno: {
+            activoId: 'e2',
+            ejercicios: [
+               { id: 'e1', nombre: 'Uno', texto: FUENTE, bitacora: bitacoraEjercicioNueva() },
+               { id: 'e2', nombre: 'Dos', texto: FUENTE, bitacora: bitacoraEjercicioNueva() },
+            ],
+         },
+      });
+
+      const leido = await bib.leerBorrador();
+      expect(leido?.archivoId).toBe('abc.algx');
+      expect(leido?.cuaderno.activoId).toBe('e2');
    });
 
    it('el borrador no aparece en la lista de algoritmos del alumno', async () => {
       const { bib } = await nueva();
-      await bib.guardar({ programa: programa(), titulo: 'Real', identidad: IDENTIDAD });
-      await bib.guardarBorrador({ texto: FUENTE, titulo: 'En curso' });
+      await bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'Real', identidad: IDENTIDAD });
+      await bib.guardarBorrador({
+         titulo: 'En curso',
+         cuaderno: {
+            activoId: 'e1',
+            ejercicios: [
+               { id: 'e1', nombre: 'Uno', texto: FUENTE, bitacora: bitacoraEjercicioNueva() },
+            ],
+         },
+      });
 
       await bib.refrescar(IDENTIDAD.deviceId);
       expect(bib.archivos.map((a) => a.titulo)).toEqual(['Real']);
@@ -405,8 +448,8 @@ describe('biblioteca', () => {
 
    it('borrarTodo vacía la biblioteca', async () => {
       const { bib } = await nueva();
-      await bib.guardar({ programa: programa(), titulo: 'a', identidad: IDENTIDAD });
-      await bib.guardar({ programa: programa(), titulo: 'b', identidad: IDENTIDAD });
+      await bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'a', identidad: IDENTIDAD });
+      await bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'b', identidad: IDENTIDAD });
 
       await bib.borrarTodo();
       expect(bib.archivos).toEqual([]);
@@ -420,7 +463,7 @@ describe('biblioteca', () => {
          () => 'x.algx',
       );
       await expect(
-         bib.guardar({ programa: programa(), titulo: 'T', identidad: IDENTIDAD }),
+         bib.guardar({ contenido: cuadernoDe(programa()), titulo: 'T', identidad: IDENTIDAD }),
       ).rejects.toThrow(/llaves/);
    });
 });

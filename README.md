@@ -161,15 +161,15 @@ consecuencia del diseño y no un problema de sincronización.
 |---|---|
 | `src/core/` | `ast.ts`, `lexer.ts`, `parser.ts`, `printer.ts`, `interpreter.ts` |
 | `src/chart/` | `layout.ts` (geometría determinista), `Diagram.svelte` (render SVG) |
-| `src/edit/` | `mutaciones.ts`, `documento.svelte.ts`, paleta e inspectores |
+| `src/edit/` | `mutaciones.ts`, `documento.svelte.ts`, `cuaderno.svelte.ts`, paleta e inspectores |
 | `src/identity/` | Identidad del alumno, bienvenida y borrado de datos |
 | `src/crypto/` | Sobre cifrado, llaves y panel del profesor |
 | `src/guard/` | Guardas del portapapeles y bitácora de edición |
 | `src/teacher/` | Detección de copias y panel de revisión de lote |
-| `src/file/` | Formato `.algx`, almacenes, biblioteca y transferencia |
+| `src/file/` | Formatos `.algx` y `.algxp`, almacenes, biblioteca y transferencia |
 | `src/ui/` | Ejemplos, menú, tema y piezas de interfaz |
 | `docs/` | Instructivos de una página y manual de distribución |
-| `tests/` | Ciclo de ida y vuelta, intérprete, layout, mutaciones, documento, comentarios |
+| `tests/` | Ciclo de ida y vuelta, intérprete, layout, mutaciones, documento, cuaderno, plantillas, comentarios |
 
 Decisiones que conviene no deshacer sin pensarlo:
 
@@ -196,7 +196,12 @@ Decisiones que conviene no deshacer sin pensarlo:
   quedaría sin pruebas, que es justo donde un error le cuesta al alumno su trabajo.
 - **El borrador se guarda como texto, no como árbol.** Lo que hay que recuperar
   tras un cierre accidental es exactamente lo que el alumno tenía escrito,
-  aunque no compile — y un árbol no puede representar código a medias.
+  aunque no compile — y un árbol no puede representar código a medias. El
+  borrador guarda **todos** los ejercicios del cuaderno y cuál estaba activo.
+- **El `Cuaderno` reutiliza un `Documento` por ejercicio.** `Documento` ya
+  resuelve lo difícil —sincronización texto↔árbol, deshacer, conservar el último
+  árbol válido— y está probado; rehacerlo habría tirado esa cobertura. Como
+  efecto, **deshacer es por ejercicio**, que es lo que el alumno espera.
 - **Los comentarios viven en el AST**, no en el texto. La edición gráfica
   reimprime el pseudocódigo completo en cada cambio; si no estuvieran en el
   árbol, el primer clic en el diagrama borraría lo que el alumno escribió.
@@ -269,10 +274,34 @@ Contenedor JSON con dos partes:
 | Parte | Contenido | Por qué |
 |---|---|---|
 | encabezado | autor, `deviceId`, título, fechas, versión | Siempre en claro: el profesor ordena un lote y detecta duplicados sin descifrar nada. Va **cubierto por la firma**, así que alterarlo se nota |
-| `sobre` | el AST y la bitácora, cifrados | Solo lo abren el autor y el profesor |
+| `sobre` | el cuaderno y sus bitácoras, cifrados | Solo lo abren el autor y el profesor |
 
-Se siguen leyendo los archivos `alg: "ninguno"` de versiones anteriores, para
-que nadie pierda a mitad de curso lo que ya tenía hecho.
+**Un archivo es un cuaderno, no un algoritmo suelto** (`algx/2`). Dentro van
+varios `Ejercicio`, cada uno con su programa y su propia bitácora. Una tarea de
+ocho ejercicios se entrega una vez y el profesor recibe una entrega por alumno
+en lugar de ocho.
+
+`algx/2` no lee los `algx/1`. No se escribió migrador porque no llegó a haber
+entregas con el formato anterior, y una ruta de migración para archivos que no
+existen es código difícil de probar y fácil de romper: `deserializar` los rechaza
+con un mensaje claro.
+
+### Plantillas: el formato `.algxp`
+
+La tarea que el profesor reparte al grupo. **Va sin cifrar y sin firma**: la lee
+todo el grupo, y el enunciado de una tarea es público por naturaleza. Lo que se
+protege es la solución, que viaja en el `.algx` de cada alumno.
+
+Su razón de ser es el enlace: al importarla, cada ejercicio del cuaderno queda
+con un `origenId` que apunta al de la plantilla. Es lo que permite comparar el
+ejercicio 3 de Ana con el 3 de Luis **aunque los dos lo renombren**, que era el
+problema al revisar un lote.
+
+El cuaderno guarda además la `huella` de los enunciados originales. El panel la
+recalcula sobre lo entregado y marca «otro enunciado» si no coincide, sin
+necesitar el archivo de la plantilla a mano. Un alumno decidido podría
+recalcularla —todo está dentro de su propio sobre—, pero alterar el enunciado no
+le sirve para copiar: la señal distingue al despistado, no al tramposo.
 
 ## Cifrado
 
@@ -344,9 +373,18 @@ app. Aun así, hasta que importe la del curso, su profesor no podrá abrirlos.
 Con la llave privada cargada aparece **Revisar entregas** en el menú. Importa un
 lote entero de `.algx` de una vez y muestra:
 
-- Los **grupos para revisar**, primero, con el motivo de cada señal.
-- Una tabla con la evidencia de cada trabajo: tiempo activo, sesiones,
-  ediciones, intentos de pegar bloqueados, y si la firma cuadra.
+- Los **grupos para revisar**, primero, con el motivo de cada señal y a qué
+  ejercicio de quién corresponde: «Ana · Promedio ↔ Luis · ejercicio 2».
+- Una fila **por entrega**, con el resumen del cuaderno: cuántos ejercicios
+  tienen contenido, tiempo total, sesiones y si la firma cuadra. Se despliega a
+  una fila por ejercicio con su propia evidencia.
+
+Agrupado y no plano porque un grupo de 30 alumnos con 8 ejercicios son 240
+algoritmos: escanear 30 filas y desplegar la que interese es manejable; 240
+filas seguidas no dejan ver cómo le fue a un alumno concreto.
+
+La unidad de comparación es el **ejercicio**, no la entrega: comparar cuadernos
+enteros solo detectaría a quien copió los ocho.
 
 Sobre el tono: la interfaz dice «revisar», nunca «copia». Los umbrales de la
 bitácora son **deliberadamente laxos** — es preferible dejar pasar una copia que

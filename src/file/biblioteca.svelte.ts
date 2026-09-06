@@ -9,7 +9,6 @@
  * otro que se llame igual, y dos algoritmos pueden compartir título sin chocar.
  */
 
-import type { Program } from '../core/ast';
 import type { Identidad } from '../identity/identidad';
 import type { LlavesAlumno } from '../crypto/llaves';
 import {
@@ -20,18 +19,18 @@ import {
    type ComoSeAbrio,
 } from '../crypto/sobre';
 import {
-   bitacoraNueva,
    crearEncabezado,
    deserializar,
    encabezadoCanonico,
    ErrorArchivo,
    nombreSugerido,
+   normalizarContenido,
    serializarCifrado,
-   type Bitacora,
    type Contenido,
    type Encabezado,
 } from './algx';
 import type { AlmacenArchivos } from './almacenes';
+import type { BorradorCuaderno } from '../edit/cuaderno.svelte';
 
 /**
  * Prefijo de los archivos internos de la app, que no son algoritmos del alumno
@@ -42,13 +41,18 @@ const PREFIJO_INTERNO = '_';
 /** Dónde vive el borrador automático. */
 const BORRADOR = '_borrador.json';
 
-/** Lo que se conserva del trabajo en curso entre sesiones. */
+/**
+ * Lo que se conserva del trabajo en curso entre sesiones.
+ *
+ * Guarda el cuaderno completo: si solo se guardara el ejercicio activo, cerrar
+ * la app perdería los otros siete.
+ */
 export interface Borrador {
-   /** Pseudocódigo tal cual, incluidos los errores a medio escribir. */
-   texto: string;
    titulo: string;
    /** Archivo de la biblioteca al que corresponde, si estaba abierto uno. */
    archivoId?: string;
+   /** El cuaderno tal cual lo devuelve `Cuaderno.aBorrador()`. */
+   cuaderno: BorradorCuaderno;
 }
 
 /** Llaves disponibles ahora mismo. La biblioteca las consulta al vuelo. */
@@ -78,6 +82,13 @@ export interface ResumenArchivo {
     */
    huella?: string;
    tamano: number;
+}
+
+/** Lo que hay que darle a la biblioteca para escribir un archivo. */
+export interface ContenidoAGuardar {
+   contenido: Contenido;
+   titulo: string;
+   identidad: Identidad;
 }
 
 export interface ArchivoAbierto {
@@ -166,13 +177,9 @@ export class Biblioteca {
     * exportar no debe obligar a guardar antes: es el paso que el alumno
     * olvidaría justo al entregar.
     */
-   async construir(opciones: {
-      programa: Program;
-      titulo: string;
-      identidad: Identidad;
-      bitacora?: Bitacora;
-      creado?: string;
-   }): Promise<{ encabezado: Encabezado; texto: string }> {
+   async construir(
+      opciones: ContenidoAGuardar & { creado?: string },
+   ): Promise<{ encabezado: Encabezado; texto: string }> {
       const { alumno, profesorPublica } = this.cripto();
       if (!alumno) {
          throw new ErrorArchivo('Todavía no hay llaves en este dispositivo.');
@@ -191,13 +198,8 @@ export class Biblioteca {
          creado: opciones.creado,
       });
 
-      const contenido: Contenido = {
-         programa: opciones.programa,
-         bitacora: opciones.bitacora ?? bitacoraNueva(),
-      };
-
       const sobre = await cifrar({
-         contenido: JSON.stringify(contenido),
+         contenido: JSON.stringify(opciones.contenido),
          llaveAlumno: alumno.maestra,
          firmaPrivada: alumno.firma.privateKey,
          firmaPublica: alumno.firmaPublicaJwk,
@@ -212,13 +214,7 @@ export class Biblioteca {
     * Guarda un algoritmo. Si se pasa `id`, sobrescribe ese archivo conservando
     * su fecha de creación.
     */
-   async guardar(opciones: {
-      programa: Program;
-      titulo: string;
-      identidad: Identidad;
-      id?: string;
-      bitacora?: Bitacora;
-   }): Promise<string> {
+   async guardar(opciones: ContenidoAGuardar & { id?: string }): Promise<string> {
       const id = opciones.id ?? `${this.generarId()}.algx`;
 
       // Al sobrescribir se conserva la fecha de creación original: es parte de
@@ -274,12 +270,7 @@ export class Biblioteca {
 
       let contenido: Contenido;
       try {
-         const bruto = JSON.parse(resultado.contenido) as Partial<Contenido>;
-         if (!bruto.programa) throw new Error('sin programa');
-         contenido = {
-            programa: bruto.programa,
-            bitacora: { ...bitacoraNueva(), ...(bruto.bitacora ?? {}) },
-         };
+         contenido = normalizarContenido(JSON.parse(resultado.contenido));
       } catch {
          throw new ErrorArchivo('El archivo se descifró pero su contenido está dañado.');
       }
@@ -337,12 +328,17 @@ export class Biblioteca {
       try {
          const texto = await this.almacen.leer(BORRADOR);
          if (!texto) return null;
+
          const bruto = JSON.parse(texto) as Partial<Borrador>;
-         if (typeof bruto.texto !== 'string') return null;
+         const cuaderno = bruto.cuaderno;
+         if (!cuaderno || !Array.isArray(cuaderno.ejercicios) || cuaderno.ejercicios.length === 0) {
+            return null;
+         }
+
          return {
-            texto: bruto.texto,
             titulo: typeof bruto.titulo === 'string' ? bruto.titulo : 'Sin título',
             archivoId: typeof bruto.archivoId === 'string' ? bruto.archivoId : undefined,
+            cuaderno,
          };
       } catch {
          return null;

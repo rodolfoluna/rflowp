@@ -23,9 +23,12 @@
       /** Curso configurado, para mostrarlo de un vistazo. `null` si no hay. */
       llaveCurso: string | null;
       onLlaveCurso: () => void;
+      /** Abrir la plantilla que repartió el profesor. */
+      onAbrirPlantilla: () => void;
       /** Con la llave privada cargada aparece la revisión de entregas. */
       modoProfesor: boolean;
       onRevisarLote: () => void;
+      onCrearPlantilla: () => void;
       preferenciaTema: PreferenciaTema;
       onAcercaDe: () => void;
       onBorrarDatos: () => void;
@@ -43,8 +46,10 @@
       onExportar,
       llaveCurso,
       onLlaveCurso,
+      onAbrirPlantilla,
       modoProfesor,
       onRevisarLote,
+      onCrearPlantilla,
       preferenciaTema,
       onAcercaDe,
       onBorrarDatos,
@@ -131,6 +136,14 @@
          </span>
       </button>
 
+      <button onclick={onAbrirPlantilla}>
+         <span class="icono" aria-hidden="true">📋</span>
+         <span class="texto">
+            <strong>Abrir plantilla</strong>
+            <small>La tarea que repartió tu profesor, con sus enunciados</small>
+         </span>
+      </button>
+
       <button onclick={onLlaveCurso} class:pendiente={!llaveCurso}>
          <span class="icono" aria-hidden="true">🔑</span>
          <span class="texto">
@@ -147,6 +160,14 @@
             <span class="texto">
                <strong>Revisar entregas</strong>
                <small>Importar un lote y ver la evidencia de cada trabajo</small>
+            </span>
+         </button>
+
+         <button onclick={onCrearPlantilla}>
+            <span class="icono" aria-hidden="true">🧩</span>
+            <span class="texto">
+               <strong>Crear plantilla</strong>
+               <small>Convertir este cuaderno en la tarea que repartes al grupo</small>
             </span>
          </button>
       {/if}

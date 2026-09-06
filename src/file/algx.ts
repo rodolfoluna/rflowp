@@ -6,21 +6,26 @@
  *   encabezado  SIEMPRE en claro. Lleva quién lo hizo y cuándo. El profesor
  *               necesita poder ordenar un lote de entregas y detectar
  *               duplicados sin descifrar nada.
- *   carga       el algoritmo y su bitácora, dentro de un sobre cifrado.
+ *   carga       el cuaderno —sus ejercicios y sus bitácoras— dentro de un
+ *               sobre cifrado.
  *
  * El encabezado va en claro pero **cubierto por la firma**: alterar el nombre o
  * el número de control invalida la firma del archivo.
  *
- * Se siguen leyendo los archivos `alg: "ninguno"` de versiones anteriores, para
- * que nadie pierda a mitad de curso lo que ya tenía hecho. Los nuevos siempre
- * se escriben cifrados.
+ * Un archivo es un CUADERNO con varios ejercicios, no un algoritmo suelto: así
+ * una tarea de ocho ejercicios se entrega una vez y no ocho.
+ *
+ * `algx/2` no lee los archivos `algx/1`. Se decidió no escribir un migrador
+ * porque no llegó a haber entregas con el formato anterior, y una ruta de
+ * migración para archivos que no existen es código difícil de probar y fácil de
+ * romper. `deserializar` los rechaza con un mensaje claro.
  */
 
 import type { Program } from '../core/ast';
 import { ESQUEMA, type Sobre } from '../crypto/sobre';
 
 /** Versión del formato. Sube cuando el contenedor deje de ser compatible. */
-export const FORMATO = 'algx/1';
+export const FORMATO = 'algx/2';
 
 /** Marca que identifica el archivo antes de intentar interpretarlo. */
 const MAGIC = 'RFLOWP';
@@ -48,23 +53,71 @@ export interface Encabezado {
 }
 
 /**
- * Registro de procedencia. Es la evidencia que el profesor mira cuando duda de
- * una entrega: un trabajo con dos minutos de edición y cero sesiones previas no
- * se escribió, se copió.
+ * Lo que se midió trabajando en UN ejercicio.
+ *
+ * Es por ejercicio y no por cuaderno porque es lo que hace útil la revisión:
+ * «dedicó 40 minutos al ejercicio 2 y 90 segundos al 5» dice mucho más que un
+ * total agregado, y es justo lo que distingue un trabajo hecho de uno
+ * transcrito.
  */
-export interface Bitacora {
-   /** Cuántas veces se abrió y editó el archivo. */
-   sesiones: number;
-   /** Segundos con la app en primer plano trabajando en este algoritmo. */
+export interface BitacoraEjercicio {
+   /** Segundos con la app visible y en primer plano en este ejercicio. */
    segundosActivos: number;
-   /** Cuántas ediciones se aplicaron en total (texto y diagrama). */
+   /** Ediciones aplicadas, por texto o por diagrama. */
    ediciones: number;
-   /** Intentos de pegar texto que la app bloqueó. */
+   /** Intentos de pegar que la app bloqueó mientras se editaba este ejercicio. */
    pegadosBloqueados: number;
 }
 
-export interface Contenido {
+/**
+ * Lo del cuaderno entero.
+ *
+ * `sesiones` vive aquí y no en el ejercicio porque abrir el archivo es un acto
+ * del cuaderno; los totales se derivan sumando los ejercicios.
+ */
+export interface Bitacora extends BitacoraEjercicio {
+   /** Cuántas veces se abrió el cuaderno para trabajar. */
+   sesiones: number;
+}
+
+/** Un algoritmo dentro del cuaderno. */
+export interface Ejercicio {
+   /** Estable dentro del cuaderno; con él se referencia sin depender del orden. */
+   id: string;
+   nombre: string;
+   /**
+    * Lo que hay que resolver. Lo escribe el profesor en la plantilla y el
+    * alumno lo ve sin poder editarlo.
+    */
+   enunciado?: string;
+   /**
+    * Id de este ejercicio en la plantilla de la que salió.
+    *
+    * Es lo que permite comparar «el ejercicio 3 de Ana» con «el de Luis» aunque
+    * cada uno lo haya renombrado: se emparejan por identificador, no por nombre.
+    */
+   origenId?: string;
    programa: Program;
+   bitacora: BitacoraEjercicio;
+}
+
+/** De qué plantilla salió el cuaderno. */
+export interface OrigenPlantilla {
+   id: string;
+   nombre: string;
+   /** Huella del enunciado original, para detectar si se alteró. */
+   huella: string;
+}
+
+/**
+ * El contenido de un archivo: un cuaderno con varios ejercicios.
+ *
+ * Un archivo por tarea en vez de uno por ejercicio: el alumno entrega una vez y
+ * el profesor recibe una entrega por alumno en lugar de ocho.
+ */
+export interface Contenido {
+   ejercicios: Ejercicio[];
+   plantilla?: OrigenPlantilla;
    bitacora: Bitacora;
 }
 
@@ -80,6 +133,26 @@ export interface ArchivoLeido {
 
 export function bitacoraNueva(): Bitacora {
    return { sesiones: 1, segundosActivos: 0, ediciones: 0, pegadosBloqueados: 0 };
+}
+
+export function bitacoraEjercicioNueva(): BitacoraEjercicio {
+   return { segundosActivos: 0, ediciones: 0, pegadosBloqueados: 0 };
+}
+
+/** Totales del cuaderno, sumando sus ejercicios. */
+export function totalizarBitacora(
+   ejercicios: readonly Ejercicio[],
+   sesiones: number,
+): Bitacora {
+   return ejercicios.reduce<Bitacora>(
+      (suma, e) => ({
+         sesiones,
+         segundosActivos: suma.segundosActivos + e.bitacora.segundosActivos,
+         ediciones: suma.ediciones + e.bitacora.ediciones,
+         pegadosBloqueados: suma.pegadosBloqueados + e.bitacora.pegadosBloqueados,
+      }),
+      { sesiones, segundosActivos: 0, ediciones: 0, pegadosBloqueados: 0 },
+   );
 }
 
 /** Error con un mensaje pensado para el alumno, no para la consola. */
@@ -218,20 +291,48 @@ export function deserializar(texto: string): ArchivoLeido {
       );
    }
 
-   const contenido = e.contenido as Partial<Contenido> | undefined;
-   if (!contenido || typeof contenido !== 'object' || !contenido.programa) {
+   return {
+      encabezado,
+      carga: { cifrado: false, contenido: normalizarContenido(e.contenido) },
+   };
+}
+
+/**
+ * Valida el cuaderno y rellena lo que falte.
+ *
+ * Se usa en los dos caminos —archivo en claro y sobre recién descifrado— para
+ * que no haya dos nociones de «contenido válido» que acaben divergiendo.
+ */
+export function normalizarContenido(bruto: unknown): Contenido {
+   if (typeof bruto !== 'object' || bruto === null) {
       throw new ErrorArchivo('El archivo está incompleto o dañado.');
    }
 
+   const c = bruto as Partial<Contenido>;
+   if (!Array.isArray(c.ejercicios) || c.ejercicios.length === 0) {
+      throw new ErrorArchivo('El archivo está incompleto o dañado.');
+   }
+
+   const ejercicios = c.ejercicios.map((e, i) => {
+      if (!e || typeof e !== 'object' || !e.programa) {
+         throw new ErrorArchivo('El archivo está incompleto o dañado.');
+      }
+      return {
+         // Un cuaderno sin ids utilizables se repara aquí en vez de fallar: el
+         // trabajo del alumno importa más que la pulcritud del archivo.
+         id: typeof e.id === 'string' && e.id ? e.id : `ej${i + 1}`,
+         nombre: typeof e.nombre === 'string' && e.nombre ? e.nombre : `Ejercicio ${i + 1}`,
+         ...(typeof e.enunciado === 'string' ? { enunciado: e.enunciado } : {}),
+         ...(typeof e.origenId === 'string' ? { origenId: e.origenId } : {}),
+         programa: e.programa,
+         bitacora: { ...bitacoraEjercicioNueva(), ...(e.bitacora ?? {}) },
+      } satisfies Ejercicio;
+   });
+
    return {
-      encabezado,
-      carga: {
-         cifrado: false,
-         contenido: {
-            programa: contenido.programa,
-            bitacora: { ...bitacoraNueva(), ...(contenido.bitacora ?? {}) },
-         },
-      },
+      ejercicios,
+      ...(c.plantilla ? { plantilla: c.plantilla } : {}),
+      bitacora: { ...bitacoraNueva(), ...(c.bitacora ?? {}) },
    };
 }
 

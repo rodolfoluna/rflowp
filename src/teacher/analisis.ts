@@ -137,13 +137,25 @@ export const TAMANO_MINIMO_PARA_COMPARAR = 6;
 // Agrupación de un lote
 // ---------------------------------------------------------------------------
 
-export interface EntregaParaAnalizar {
-   id: string;
+/**
+ * Un ejercicio de una entrega, listo para comparar.
+ *
+ * La unidad de comparación es el EJERCICIO y no la entrega: con cuadernos de
+ * ocho, comparar archivos enteros solo detectaría al que copió los ocho.
+ */
+export interface EjercicioParaAnalizar {
+   /** Archivo del que salió. */
+   entregaId: string;
+   ejercicioId: string;
    numeroControl: string;
+   /** Nombre del alumno. */
    nombre: string;
+   nombreEjercicio: string;
    deviceId: string;
-   /** Huella de la llave de firma. `undefined` en archivos sin cifrar. */
+   /** Huella de la llave de firma, del archivo entero. */
    huella?: string;
+   /** Id en la plantilla, si el cuaderno salió de una. */
+   origenId?: string;
    /** Forma estructural. `undefined` si no se pudo descifrar. */
    forma?: string;
    /** Número de sentencias, para descartar algoritmos triviales. */
@@ -154,10 +166,10 @@ export type TipoCoincidencia = 'instalacion' | 'forma';
 
 export interface Coincidencia {
    tipo: TipoCoincidencia;
-   /** Ids de las entregas implicadas. */
-   ids: string[];
-   /** Nombres de los alumnos, para mostrarlo. */
-   alumnos: string[];
+   /** Entregas implicadas. */
+   entregas: string[];
+   /** Quién y en qué ejercicio: «Ana · Promedio». */
+   implicados: Array<{ alumno: string; ejercicio: string }>;
    explicacion: string;
 }
 
@@ -167,14 +179,16 @@ export interface Coincidencia {
  * Solo se reporta un grupo cuando implica a **alumnos distintos**: que alguien
  * entregue dos versiones de su propio trabajo es normal y no interesa.
  */
-export function buscarCoincidencias(entregas: EntregaParaAnalizar[]): Coincidencia[] {
+export function buscarCoincidencias(
+   ejercicios: EjercicioParaAnalizar[],
+): Coincidencia[] {
    const salida: Coincidencia[] = [];
 
    const agrupar = (
-      clave: (e: EntregaParaAnalizar) => string | undefined,
-   ): Map<string, EntregaParaAnalizar[]> => {
-      const grupos = new Map<string, EntregaParaAnalizar[]>();
-      for (const e of entregas) {
+      clave: (e: EjercicioParaAnalizar) => string | undefined,
+   ): Map<string, EjercicioParaAnalizar[]> => {
+      const grupos = new Map<string, EjercicioParaAnalizar[]>();
+      for (const e of ejercicios) {
          const k = clave(e);
          if (!k) continue;
          const lista = grupos.get(k) ?? [];
@@ -184,39 +198,61 @@ export function buscarCoincidencias(entregas: EntregaParaAnalizar[]): Coincidenc
       return grupos;
    };
 
-   const alumnosDistintos = (grupo: EntregaParaAnalizar[]): string[] =>
+   const alumnosDistintos = (grupo: EjercicioParaAnalizar[]): string[] =>
       [...new Set(grupo.map((e) => e.numeroControl))];
 
-   // 1. Misma instalación: la señal más fuerte.
+   /** Quién y en qué ejercicio, sin repetir al mismo alumno dos veces. */
+   const implicadosDe = (grupo: EjercicioParaAnalizar[]) => {
+      const vistos = new Set<string>();
+      const salida: Array<{ alumno: string; ejercicio: string }> = [];
+      for (const e of grupo) {
+         const clave = `${e.numeroControl}|${e.ejercicioId}`;
+         if (vistos.has(clave)) continue;
+         vistos.add(clave);
+         salida.push({ alumno: e.nombre, ejercicio: e.nombreEjercicio });
+      }
+      return salida;
+   };
+
+   // 1. Misma instalación. Es del ARCHIVO entero, no del ejercicio: la firma es
+   //    una por entrega. Se reporta una vez por grupo, no una por ejercicio.
    for (const [, grupo] of agrupar((e) => e.huella ?? (e.deviceId || undefined))) {
       const distintos = alumnosDistintos(grupo);
       if (distintos.length < 2) continue;
 
+      const entregas = [...new Set(grupo.map((e) => e.entregaId))];
+      const alumnos = [...new Set(grupo.map((e) => e.nombre))];
+
       salida.push({
          tipo: 'instalacion',
-         ids: grupo.map((e) => e.id),
-         alumnos: [...new Set(grupo.map((e) => e.nombre))],
+         entregas,
+         implicados: alumnos.map((alumno) => ({ alumno, ejercicio: 'todo el cuaderno' })),
          explicacion:
             'Estas entregas se crearon en el mismo dispositivo, con la misma llave. Aparecen a nombre de alumnos distintos.',
       });
    }
 
    // 2. Misma forma, ignorando nombres y mensajes.
-   const yaSenalados = new Set(salida.flatMap((c) => c.ids));
+   const entregasSenaladas = new Set(salida.flatMap((c) => c.entregas));
    for (const [, grupo] of agrupar((e) =>
       e.forma && (e.tamano ?? 0) >= TAMANO_MINIMO_PARA_COMPARAR ? e.forma : undefined,
    )) {
       const distintos = alumnosDistintos(grupo);
       if (distintos.length < 2) continue;
       // No repetir lo que ya salió por instalación compartida.
-      if (grupo.every((e) => yaSenalados.has(e.id))) continue;
+      if (grupo.every((e) => entregasSenaladas.has(e.entregaId))) continue;
+
+      // Si todos vienen del mismo ejercicio de la plantilla, se puede decir.
+      const origenes = new Set(grupo.map((e) => e.origenId).filter(Boolean));
+      const mismoEjercicio = origenes.size === 1;
 
       salida.push({
          tipo: 'forma',
-         ids: grupo.map((e) => e.id),
-         alumnos: [...new Set(grupo.map((e) => e.nombre))],
-         explicacion:
-            'El algoritmo es el mismo aunque cambien los nombres de las variables y los mensajes.',
+         entregas: [...new Set(grupo.map((e) => e.entregaId))],
+         implicados: implicadosDe(grupo),
+         explicacion: mismoEjercicio
+            ? 'Es el mismo ejercicio de la tarea y el algoritmo coincide, aunque cambien los nombres de las variables y los mensajes.'
+            : 'El algoritmo es el mismo aunque cambien los nombres de las variables y los mensajes.',
       });
    }
 

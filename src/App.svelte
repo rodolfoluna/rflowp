@@ -21,7 +21,9 @@
    import type { ParseError } from './core/parser';
    import { print } from './core/printer';
    import type { Program } from './core/ast';
-   import { Documento } from './edit/documento.svelte';
+   import { Cuaderno } from './edit/cuaderno.svelte';
+   import SelectorEjercicio from './edit/SelectorEjercicio.svelte';
+   import ListaEjercicios from './edit/ListaEjercicios.svelte';
    import { crearSentencia, insertar, type Posicion, type TipoSentencia } from './edit/mutaciones';
    import { crearIdentidad, type Identidad } from './identity/identidad';
    import {
@@ -33,9 +35,12 @@
    } from './file/almacenes';
    import { Biblioteca, type ContextoCripto } from './file/biblioteca.svelte';
    import { nombreSugerido } from './file/algx';
+   import { origenDe, type Plantilla } from './file/plantilla';
    import { descargar } from './file/transferencia';
    import PanelProfesor from './crypto/PanelProfesor.svelte';
    import PanelLote from './teacher/PanelLote.svelte';
+   import AbrirPlantilla from './file/AbrirPlantilla.svelte';
+   import EditorPlantilla from './teacher/EditorPlantilla.svelte';
    import { Guardas } from './guard/guardas.svelte';
    import { Cronista } from './guard/bitacora.svelte';
    import {
@@ -48,12 +53,14 @@
    } from './crypto/llaves';
    import { APP_VERSION } from './ui/version';
    import { PreferenciaTema } from './ui/tema.svelte';
-   import { EJEMPLO_INICIAL } from './ui/ejemplos';
 
    type Vista = 'codigo' | 'diagrama';
    type LineaSalida = { texto: string; tipo: 'salida' | 'error' | 'info' };
 
-   const doc = new Documento(EJEMPLO_INICIAL);
+   const cuaderno = new Cuaderno();
+
+   /** Atajo al ejercicio que se está editando. Todo lo demás sigue igual. */
+   const doc = $derived(cuaderno.activo);
 
    const almacenIdentidad = almacenIdentidadIndexedDB();
    const almacenLlaves = almacenLlavesIndexedDB();
@@ -105,7 +112,13 @@
    let panelArchivos = $state(false);
    let panelProfesor = $state(false);
    let panelLote = $state(false);
+   let abrirPlantilla = $state(false);
+   let editorPlantilla = $state(false);
    let acercaDe = $state(false);
+   let listaEjercicios = $state(false);
+   /** Cuando no es null, se está renombrando ese ejercicio. */
+   let renombrando = $state<{ id: string; nombre: string } | null>(null);
+   let enunciadoAbierto = $state(true);
    let borrandoDatos = $state(false);
    /** Cuando no es null, se está pidiendo un título para guardar. */
    let pidiendoTitulo = $state<{ como: boolean } | null>(null);
@@ -185,7 +198,7 @@
          // que el alumno no vea aparecer el ejemplo y luego cambiar solo.
          const borrador = await biblioteca.leerBorrador();
          if (borrador) {
-            doc.cargar(borrador.texto);
+            cuaderno.desdeBorrador(borrador.cuaderno);
             tituloActual = borrador.titulo;
             archivoAbiertoId = borrador.archivoId;
             restauradoDeBorrador = true;
@@ -206,14 +219,22 @@
     * exactamente lo que el alumno tenía escrito, aunque no compile.
     */
    $effect(() => {
-      const texto = doc.texto;
+      // Se leen para que el efecto vuelva a correr al cambiar cualquiera de las
+      // dos: el texto del ejercicio activo, o cuál es el activo.
+      void doc.texto;
+      void cuaderno.activoId;
+      void cuaderno.total;
       const titulo = tituloActual;
       const archivoId = archivoAbiertoId;
 
       if (arrancando || !identidad) return;
 
       const temporizador = setTimeout(() => {
-         void biblioteca.guardarBorrador({ texto, titulo, archivoId });
+         void biblioteca.guardarBorrador({
+            titulo,
+            archivoId,
+            cuaderno: cuaderno.aBorrador(),
+         });
       }, 1200);
 
       return () => clearTimeout(temporizador);
@@ -264,11 +285,10 @@
 
       try {
          const id = await biblioteca.guardar({
-            programa: doc.programa,
+            contenido: contenidoDelCuaderno(),
             titulo: titulo ?? tituloActual,
             identidad,
             id: titulo ? undefined : archivoAbiertoId,
-            bitacora: cronista.instantanea(guardas.pegadosBloqueados),
          });
          archivoAbiertoId = id;
          if (titulo) tituloActual = titulo;
@@ -281,18 +301,15 @@
    async function abrirArchivo(id: string) {
       try {
          const archivo = await biblioteca.abrir(id);
-         // Se carga como texto para que el árbol y el pseudocódigo queden
-         // consistentes desde el primer momento.
-         doc.cargar(print(archivo.contenido.programa));
+         cuaderno.cargar(archivo.contenido);
          archivoAbiertoId = id;
          tituloActual = archivo.encabezado.titulo;
          nodoSeleccionado = undefined;
          panelArchivos = false;
 
-         // Se continúa la bitácora del archivo: abrirlo para seguir trabajando
-         // cuenta como una sesión más, y el tiempo acumulado no se pierde.
-         cronista.continuar(archivo.contenido.bitacora);
-         guardas.fijarDesdeArchivo(archivo.contenido.bitacora.pegadosBloqueados);
+         // El cuaderno ya conserva la bitácora de cada ejercicio al cargarlo;
+         // aquí solo se pone el cronómetro a medir el ejercicio activo.
+         sincronizarMedicion();
 
          if (archivo.como === 'profesor' && !archivo.firmaValida) {
             // Lo más importante que puede saber un profesor al abrir una
@@ -309,7 +326,7 @@
    }
 
    function nuevoAlgoritmo() {
-      doc.cargar(EJEMPLO_INICIAL);
+      cuaderno.reiniciar();
       archivoAbiertoId = undefined;
       tituloActual = 'Sin título';
       nodoSeleccionado = undefined;
@@ -319,10 +336,35 @@
       anunciar('Algoritmo nuevo');
    }
 
+   /**
+    * Instala la tarea del profesor. Reemplaza el cuaderno entero, por eso el
+    * diálogo lo confirma antes de llamar aquí.
+    */
+   function usarPlantilla(plantilla: Plantilla) {
+      cuaderno.desdePlantilla(
+         origenDe(plantilla),
+         plantilla.ejercicios.map((e) => ({
+            origenId: e.id,
+            nombre: e.nombre,
+            ...(e.enunciado ? { enunciado: e.enunciado } : {}),
+            ...(e.programa ? { programa: e.programa } : {}),
+         })),
+      );
+
+      abrirPlantilla = false;
+      // Es una tarea nueva: no debe sobrescribir el archivo que estaba abierto.
+      archivoAbiertoId = undefined;
+      tituloActual = plantilla.nombre;
+      nodoSeleccionado = undefined;
+      enunciadoAbierto = true;
+      sincronizarMedicion();
+      anunciar(`Plantilla «${plantilla.nombre}» abierta`);
+   }
+
    /** Vuelve a arrancar limpio tras borrar los datos. */
    async function reiniciarDocumento() {
       await biblioteca.borrarBorrador();
-      doc.cargar(EJEMPLO_INICIAL);
+      cuaderno.reiniciar();
       archivoAbiertoId = undefined;
       tituloActual = 'Sin título';
       cronista.reiniciar();
@@ -340,10 +382,9 @@
 
       try {
          const { encabezado, texto } = await biblioteca.construir({
-            programa: doc.programa,
+            contenido: contenidoDelCuaderno(),
             titulo: tituloActual,
             identidad,
-            bitacora: cronista.instantanea(guardas.pegadosBloqueados),
          });
          const nombre = nombreSugerido(encabezado);
          descargar(nombre, texto);
@@ -375,6 +416,52 @@
       borrandoDatos = false;
       menuAbierto = false;
       panelArchivos = false;
+   }
+
+   // -- Bitácora por ejercicio ----------------------------------------------
+
+   /**
+    * Vuelca al cuaderno lo medido del ejercicio que estaba activo y reinicia
+    * los contadores para el nuevo.
+    *
+    * Se hace al cambiar de ejercicio para que el tiempo y las ediciones vayan a
+    * quien corresponde: si se acumularan en bloque, «40 minutos» no diría en
+    * cuál de los ocho ejercicios se emplearon, que es justo lo útil.
+    */
+   let midiendoId = $state('');
+
+   function volcarMedicion() {
+      const previa = midiendoId ? cuaderno.bitacoraDe(midiendoId) : undefined;
+      // Si el ejercicio ya no está —se abrió otro archivo o se recuperó el
+      // borrador— no hay nada que volcar; lo medido pertenecía a otro cuaderno.
+      if (!previa) return;
+
+      cuaderno.anotar(midiendoId, {
+         segundosActivos: previa.segundosActivos + cronista.segundosActivos,
+         ediciones: previa.ediciones + cronista.ediciones,
+         pegadosBloqueados: guardas.pegadosBloqueados,
+      });
+   }
+
+   /** Cierra el tramo del ejercicio anterior y abre el del activo. */
+   function sincronizarMedicion() {
+      volcarMedicion();
+      midiendoId = cuaderno.activoId;
+      cronista.reiniciar();
+      guardas.fijarDesdeArchivo(cuaderno.bitacoraDe(midiendoId)?.pegadosBloqueados ?? 0);
+   }
+
+   // Al cambiar de ejercicio, se reparte lo medido antes de seguir.
+   $effect(() => {
+      const activo = cuaderno.activoId;
+      if (activo !== midiendoId) sincronizarMedicion();
+   });
+
+   /** El cuaderno listo para guardar, con la medición en curso ya volcada. */
+   function contenidoDelCuaderno() {
+      volcarMedicion();
+      cronista.reiniciar();
+      return cuaderno.aContenido();
    }
 
    // -- Edición gráfica -----------------------------------------------------
@@ -575,6 +662,10 @@
          ⋮
       </button>
 
+      <div class="fila-selector">
+         <SelectorEjercicio {cuaderno} onAbrirLista={() => (listaEjercicios = true)} />
+      </div>
+
       <div class="pestanas" role="tablist">
          <button
             role="tab"
@@ -614,6 +705,22 @@
          <button onclick={() => (avisoAlmacenamientoOculto = true)} aria-label="Ocultar el aviso">
             ✕
          </button>
+      </div>
+   {/if}
+
+   {#if cuaderno.enunciadoActivo}
+      <div class="enunciado" class:plegado={!enunciadoAbierto}>
+         <button
+            class="alternar"
+            onclick={() => (enunciadoAbierto = !enunciadoAbierto)}
+            aria-expanded={enunciadoAbierto}
+         >
+            <span class="etiqueta">Qué hay que hacer</span>
+            <span class="flecha" aria-hidden="true">{enunciadoAbierto ? '▾' : '▸'}</span>
+         </button>
+         {#if enunciadoAbierto}
+            <p>{cuaderno.enunciadoActivo}</p>
+         {/if}
       </div>
    {/if}
 
@@ -745,10 +852,18 @@
             menuAbierto = false;
             panelProfesor = true;
          }}
+         onAbrirPlantilla={() => {
+            menuAbierto = false;
+            abrirPlantilla = true;
+         }}
          modoProfesor={modoProfesor}
          onRevisarLote={() => {
             menuAbierto = false;
             panelLote = true;
+         }}
+         onCrearPlantilla={() => {
+            menuAbierto = false;
+            editorPlantilla = true;
          }}
          {preferenciaTema}
          onAcercaDe={() => {
@@ -784,6 +899,31 @@
       </div>
    {/if}
 
+   {#if listaEjercicios}
+      <ListaEjercicios
+         {cuaderno}
+         onRenombrar={(id, nombre) => {
+            listaEjercicios = false;
+            renombrando = { id, nombre };
+         }}
+         onCerrar={() => (listaEjercicios = false)}
+      />
+   {/if}
+
+   {#if renombrando}
+      <PedirTexto
+         titulo="Renombrar ejercicio"
+         etiqueta="Nombre del ejercicio"
+         valorInicial={renombrando.nombre}
+         textoBoton="Renombrar"
+         onAceptar={(nombre) => {
+            if (renombrando) cuaderno.renombrar(renombrando.id, nombre);
+            renombrando = null;
+         }}
+         onCancelar={() => (renombrando = null)}
+      />
+   {/if}
+
    {#if pidiendoTitulo}
       <PedirTexto
          titulo={pidiendoTitulo.como ? 'Guardar una copia' : 'Guardar algoritmo'}
@@ -811,6 +951,20 @@
          }}
          onCerrar={() => (panelLote = false)}
       />
+   {/if}
+
+   {#if abrirPlantilla}
+      <AbrirPlantilla
+         ejerciciosActuales={cuaderno.total}
+         hayTrabajoSinGuardar={!archivoAbiertoId &&
+            cuaderno.ejercicios.some((e) => e.estado !== 'vacio')}
+         onImportar={usarPlantilla}
+         onCerrar={() => (abrirPlantilla = false)}
+      />
+   {/if}
+
+   {#if editorPlantilla}
+      <EditorPlantilla {cuaderno} {tituloActual} onCerrar={() => (editorPlantilla = false)} />
    {/if}
 
    {#if panelProfesor}
@@ -884,6 +1038,11 @@
    .sub {
       color: var(--texto-tenue);
       font-size: 12px;
+   }
+
+   .fila-selector {
+      display: flex;
+      min-width: 0;
    }
 
    .historial {
@@ -1230,6 +1389,49 @@
       box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
       pointer-events: none;
    }
+   /*
+    * El enunciado va en el flujo, no flotando: empuja el editor en vez de
+    * taparlo, y se puede plegar cuando ya se leyó.
+    */
+   .enunciado {
+      flex-shrink: 0;
+      background: var(--superficie);
+      border-bottom: 1px solid var(--borde);
+      padding: 0 14px 10px;
+   }
+   .enunciado.plegado {
+      padding-bottom: 0;
+   }
+   .enunciado .alternar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: var(--texto-tenue);
+      padding: 8px 0;
+      cursor: pointer;
+      font-family: inherit;
+   }
+   .enunciado .etiqueta {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+   }
+   .enunciado .flecha {
+      font-size: 10px;
+   }
+   .enunciado p {
+      margin: 0;
+      font-size: 13.5px;
+      line-height: 1.55;
+      color: var(--texto);
+      max-width: 70ch;
+      white-space: pre-wrap;
+   }
+
    .aviso-flotante.guarda {
       background: var(--aviso-fondo);
       color: var(--aviso-texto);
@@ -1359,6 +1561,34 @@
    @media (max-width: 520px) {
       .marca {
          display: none;
+      }
+   }
+
+   /*
+    * Por debajo de 430 px, deshacer y rehacer ceden su sitio: cambiar de
+    * ejercicio se usa constantemente y deshacer tiene el atajo de teclado.
+    */
+   @media (max-width: 430px) {
+      .historial {
+         display: none;
+      }
+   }
+
+   /*
+    * En móvil el selector baja a su propia fila.
+    *
+    * Medido a 375 px: con ⋮, las pestañas y Ejecutar en la misma línea, al
+    * nombre del ejercicio le quedaban 0 px y no se veía —justo la información
+    * por la que existe el selector—. En una fila propia caben las flechas
+    * grandes y el nombre completo, a costa de 40 px de alto.
+    */
+   @media (max-width: 640px) {
+      header {
+         flex-wrap: wrap;
+      }
+      .fila-selector {
+         order: 5;
+         flex-basis: 100%;
       }
    }
 </style>

@@ -2,14 +2,17 @@
    /**
     * Panel de revisión de un lote de entregas.
     *
-    * Descifra todo lo importado, muestra una tabla con la evidencia de cada
-    * trabajo y señala los grupos sospechosos. El orden importa: primero las
-    * coincidencias, porque es lo que el profesor busca; la tabla completa
-    * después, para el repaso normal.
+    * Descifra todo lo importado, muestra las coincidencias primero —que es lo
+    * que el profesor busca— y luego una fila por entrega con el resumen del
+    * cuaderno, desplegable a sus ejercicios.
     *
-    * Las señales **ordenan la atención, no acusan**. Dos alumnos pueden llegar
-    * a la misma solución de un ejercicio sencillo, y en los primeros temas es lo
-    * normal. Por eso el texto de la interfaz dice «revisar», nunca «copia».
+    * Por qué agrupado y no plano: un grupo de 30 alumnos con 8 ejercicios son
+    * 240 algoritmos. Escanear 30 filas y desplegar la que interese es manejable;
+    * 240 filas seguidas no dejan ver cómo le fue a un alumno concreto.
+    *
+    * Las señales **ordenan la atención, no acusan**. Dos alumnos pueden llegar a
+    * la misma solución de un ejercicio sencillo, y en los primeros temas es lo
+    * normal. Por eso el texto dice «revisar», nunca «copia».
     */
    import type { Biblioteca } from '../file/biblioteca.svelte';
    import { duracion, verosimilitud, type Verosimilitud } from '../guard/bitacora.svelte';
@@ -18,9 +21,11 @@
       formaDe,
       tamano,
       type Coincidencia,
-      type EntregaParaAnalizar,
+      type EjercicioParaAnalizar,
    } from './analisis';
    import { leerArchivoDeDisco } from '../file/transferencia';
+   import { huellaDeEnunciados } from '../file/plantilla';
+   import type { BitacoraEjercicio } from '../file/algx';
 
    interface Props {
       biblioteca: Biblioteca;
@@ -30,37 +35,70 @@
 
    let { biblioteca, onAbrir, onCerrar }: Props = $props();
 
-   interface Fila {
+   interface FilaEjercicio {
+      id: string;
+      nombre: string;
+      tiempo: number;
+      ediciones: number;
+      pegados: number;
+      sospecha: Verosimilitud;
+      /** Sin sentencias: el alumno lo dejó sin empezar. */
+      vacio: boolean;
+   }
+
+   interface FilaEntrega {
       id: string;
       alumno: string;
       numeroControl: string;
       titulo: string;
       modificado: string;
-      /** `null` si no se pudo descifrar con las llaves disponibles. */
-      tiempo: number | null;
-      sesiones: number | null;
-      ediciones: number | null;
-      pegados: number | null;
       firmaValida: boolean;
-      sospecha: Verosimilitud | null;
+      /** `null` si no se pudo descifrar con las llaves disponibles. */
+      ejercicios: FilaEjercicio[] | null;
+      sesiones: number | null;
+      tiempoTotal: number | null;
+      /** Tarea de la que salió el cuaderno, si vino de una plantilla. */
+      plantilla?: string;
+      /**
+       * Los enunciados ya no son los que repartió el profesor.
+       *
+       * No es una acusación de copia: casi siempre es que borró el enunciado
+       * sin querer. Sirve para saber que este cuaderno no es exactamente la
+       * tarea que se repartió antes de compararlo con los demás.
+       */
+      enunciadoAlterado?: boolean;
       error?: string;
    }
 
-   let filas = $state<Fila[]>([]);
+   let filas = $state<FilaEntrega[]>([]);
    let coincidencias = $state<Coincidencia[]>([]);
    let revisando = $state(false);
    let mensaje = $state<string | null>(null);
+   let desplegadas = $state<Set<string>>(new Set());
    let entradaArchivos: HTMLInputElement | undefined = $state();
 
-   /** Ids resaltados por pertenecer a un grupo sospechoso. */
-   const senalados = $derived(new Set(coincidencias.flatMap((c) => c.ids)));
+   /** Entregas resaltadas por pertenecer a un grupo sospechoso. */
+   const senaladas = $derived(new Set(coincidencias.flatMap((c) => c.entregas)));
+
+   function alternar(id: string) {
+      const copia = new Set(desplegadas);
+      if (copia.has(id)) copia.delete(id);
+      else copia.add(id);
+      desplegadas = copia;
+   }
+
+   /** Un ejercicio sin sentencias no se juzga: está sin empezar, no copiado. */
+   function sospechaDe(b: BitacoraEjercicio, vacio: boolean): Verosimilitud {
+      if (vacio) return 'normal';
+      return verosimilitud({ ...b, sesiones: 1 });
+   }
 
    async function revisar() {
       revisando = true;
       mensaje = null;
 
-      const nuevasFilas: Fila[] = [];
-      const paraAnalizar: EntregaParaAnalizar[] = [];
+      const nuevasFilas: FilaEntrega[] = [];
+      const paraAnalizar: EjercicioParaAnalizar[] = [];
 
       for (const resumen of biblioteca.archivos) {
          const comun = {
@@ -73,44 +111,76 @@
 
          try {
             const abierto = await biblioteca.abrir(resumen.id);
-            const b = abierto.contenido.bitacora;
+            const ejercicios: FilaEjercicio[] = [];
+
+            for (const e of abierto.contenido.ejercicios) {
+               const vacio = e.programa.body.length === 0;
+               ejercicios.push({
+                  id: e.id,
+                  nombre: e.nombre,
+                  tiempo: e.bitacora.segundosActivos,
+                  ediciones: e.bitacora.ediciones,
+                  pegados: e.bitacora.pegadosBloqueados,
+                  sospecha: sospechaDe(e.bitacora, vacio),
+                  vacio,
+               });
+
+               // Los vacíos no entran a comparar: coincidirían todos entre sí.
+               if (!vacio) {
+                  paraAnalizar.push({
+                     entregaId: resumen.id,
+                     ejercicioId: e.id,
+                     numeroControl: resumen.numeroControl,
+                     nombre: resumen.autor,
+                     nombreEjercicio: e.nombre,
+                     deviceId: '',
+                     huella: resumen.huella,
+                     origenId: e.origenId,
+                     forma: formaDe(e.programa),
+                     tamano: tamano(e.programa),
+                  });
+               }
+            }
+
+            // De la plantilla solo se guardó la huella, no el archivo: basta
+            // para saber si los enunciados siguen siendo los repartidos.
+            const origen = abierto.contenido.plantilla;
+            const alterado =
+               origen !== undefined &&
+               origen.huella !== '' &&
+               origen.huella !==
+                  (await huellaDeEnunciados(
+                     abierto.contenido.ejercicios
+                        .filter((e) => e.origenId)
+                        .map((e) => ({ id: e.origenId as string, enunciado: e.enunciado })),
+                  ));
 
             nuevasFilas.push({
                ...comun,
-               tiempo: b.segundosActivos,
-               sesiones: b.sesiones,
-               ediciones: b.ediciones,
-               pegados: b.pegadosBloqueados,
                firmaValida: abierto.firmaValida,
-               sospecha: verosimilitud(b),
-            });
-
-            paraAnalizar.push({
-               id: resumen.id,
-               numeroControl: resumen.numeroControl,
-               nombre: resumen.autor,
-               deviceId: '',
-               huella: resumen.huella,
-               forma: formaDe(abierto.contenido.programa),
-               tamano: tamano(abierto.contenido.programa),
+               ejercicios,
+               sesiones: abierto.contenido.bitacora.sesiones,
+               tiempoTotal: abierto.contenido.bitacora.segundosActivos,
+               ...(origen ? { plantilla: origen.nombre } : {}),
+               ...(alterado ? { enunciadoAlterado: true } : {}),
             });
          } catch (e) {
-            // Un archivo que no se puede abrir sigue contando para las señales
-            // de instalación: el encabezado y la huella se leen sin descifrar.
+            // Un archivo que no se puede abrir sigue contando para la señal de
+            // instalación: el encabezado y la huella se leen sin descifrar.
             nuevasFilas.push({
                ...comun,
-               tiempo: null,
-               sesiones: null,
-               ediciones: null,
-               pegados: null,
                firmaValida: false,
-               sospecha: null,
+               ejercicios: null,
+               sesiones: null,
+               tiempoTotal: null,
                error: e instanceof Error ? e.message : 'No se pudo abrir.',
             });
             paraAnalizar.push({
-               id: resumen.id,
+               entregaId: resumen.id,
+               ejercicioId: '',
                numeroControl: resumen.numeroControl,
                nombre: resumen.autor,
+               nombreEjercicio: '—',
                deviceId: '',
                huella: resumen.huella,
             });
@@ -121,9 +191,7 @@
       coincidencias = buscarCoincidencias(paraAnalizar);
       revisando = false;
 
-      if (nuevasFilas.length === 0) {
-         mensaje = 'No hay entregas importadas todavía.';
-      }
+      if (nuevasFilas.length === 0) mensaje = 'No hay entregas importadas todavía.';
    }
 
    async function importarVarios(e: Event) {
@@ -163,7 +231,12 @@
       });
    }
 
-   // Revisar al abrir el panel.
+   function hechos(fila: FilaEntrega): string {
+      if (!fila.ejercicios) return '—';
+      const con = fila.ejercicios.filter((e) => !e.vacio).length;
+      return `${con}/${fila.ejercicios.length}`;
+   }
+
    $effect(() => {
       void revisar();
    });
@@ -200,7 +273,11 @@
       <div class="cuerpo">
          {#if coincidencias.length > 0}
             <section class="senales">
-               <h3>{coincidencias.length === 1 ? '1 grupo para revisar' : `${coincidencias.length} grupos para revisar`}</h3>
+               <h3>
+                  {coincidencias.length === 1
+                     ? '1 grupo para revisar'
+                     : `${coincidencias.length} grupos para revisar`}
+               </h3>
                <p class="matiz">
                   Estas señales ordenan por dónde empezar; no son una acusación. Dos alumnos
                   pueden resolver igual un ejercicio sencillo.
@@ -210,7 +287,13 @@
                      <strong>
                         {c.tipo === 'instalacion' ? 'Mismo dispositivo' : 'Mismo algoritmo'}
                      </strong>
-                     <span class="alumnos">{c.alumnos.join(' · ')}</span>
+                     <span class="implicados">
+                        {#each c.implicados as im, j (j)}
+                           {#if j > 0}<span class="sep"> ↔ </span>{/if}<span class="quien"
+                              >{im.alumno}</span
+                           ><span class="donde"> · {im.ejercicio}</span>
+                        {/each}
+                     </span>
                      <p>{c.explicacion}</p>
                   </article>
                {/each}
@@ -224,18 +307,29 @@
                <table>
                   <thead>
                      <tr>
+                        <th class="sitio"><span class="oculto">Desplegar</span></th>
                         <th>Alumno</th>
-                        <th>Trabajo</th>
+                        <th>Cuaderno</th>
+                        <th class="num">Hechos</th>
                         <th class="num">Tiempo</th>
                         <th class="num">Ses.</th>
-                        <th class="num">Edic.</th>
-                        <th class="num">Pegar</th>
                         <th>Estado</th>
                      </tr>
                   </thead>
                   <tbody>
                      {#each filas as f (f.id)}
-                        <tr class:senalada={senalados.has(f.id)}>
+                        <tr class="entrega" class:senalada={senaladas.has(f.id)}>
+                           <td class="sitio">
+                              <button
+                                 class="desplegar"
+                                 onclick={() => alternar(f.id)}
+                                 disabled={!f.ejercicios}
+                                 aria-expanded={desplegadas.has(f.id)}
+                                 aria-label={desplegadas.has(f.id) ? 'Plegar' : 'Desplegar'}
+                              >
+                                 {desplegadas.has(f.id) ? '▾' : '▸'}
+                              </button>
+                           </td>
                            <td>
                               <button class="enlace" onclick={() => onAbrir(f.id)}>
                                  {f.alumno}
@@ -244,14 +338,15 @@
                            </td>
                            <td>
                               {f.titulo}
-                              <small>{cuando(f.modificado)}</small>
+                              <small>
+                                 {cuando(f.modificado)}{f.plantilla ? ` · ${f.plantilla}` : ''}
+                              </small>
                            </td>
-                           <td class="num">{f.tiempo === null ? '—' : duracion(f.tiempo)}</td>
+                           <td class="num">{hechos(f)}</td>
+                           <td class="num">
+                              {f.tiempoTotal === null ? '—' : duracion(f.tiempoTotal)}
+                           </td>
                            <td class="num">{f.sesiones ?? '—'}</td>
-                           <td class="num">{f.ediciones ?? '—'}</td>
-                           <td class="num" class:alerta={(f.pegados ?? 0) > 0}>
-                              {f.pegados ?? '—'}
-                           </td>
                            <td class="estado">
                               {#if f.error}
                                  <span class="mal">no se pudo abrir</span>
@@ -259,26 +354,59 @@
                                  {#if !f.firmaValida}
                                     <span class="mal">alterado</span>
                                  {/if}
-                                 {#if f.sospecha === 'muy-dudosa'}
-                                    <span class="mal">poco trabajo</span>
-                                 {:else if f.sospecha === 'dudosa'}
-                                    <span class="ojo">revisar</span>
+                                 {#if f.enunciadoAlterado}
+                                    <span class="ojo" title="Los enunciados no son los que se repartieron">
+                                       otro enunciado
+                                    </span>
                                  {/if}
-                                 {#if f.firmaValida && f.sospecha === 'normal'}
+                                 {#if f.ejercicios?.some((e) => e.sospecha === 'muy-dudosa')}
+                                    <span class="mal">poco trabajo</span>
+                                 {:else if f.ejercicios?.some((e) => e.sospecha === 'dudosa')}
+                                    <span class="ojo">revisar</span>
+                                 {:else if f.firmaValida}
                                     <span class="bien">ok</span>
                                  {/if}
                               {/if}
                            </td>
                         </tr>
+
+                        {#if desplegadas.has(f.id) && f.ejercicios}
+                           {#each f.ejercicios as e, i (e.id)}
+                              <tr class="ejercicio">
+                                 <td class="sitio"></td>
+                                 <td class="nombre-ejercicio" colspan="2">
+                                    <span class="pos">{i + 1}</span>
+                                    {e.nombre}
+                                 </td>
+                                 <td class="num">{e.ediciones} ed.</td>
+                                 <td class="num">{e.vacio ? '—' : duracion(e.tiempo)}</td>
+                                 <td class="num" class:alerta={e.pegados > 0}>
+                                    {e.pegados || ''}
+                                 </td>
+                                 <td class="estado">
+                                    {#if e.vacio}
+                                       <span class="vacio">sin empezar</span>
+                                    {:else if e.sospecha === 'muy-dudosa'}
+                                       <span class="mal">poco trabajo</span>
+                                    {:else if e.sospecha === 'dudosa'}
+                                       <span class="ojo">revisar</span>
+                                    {:else}
+                                       <span class="bien">ok</span>
+                                    {/if}
+                                 </td>
+                              </tr>
+                           {/each}
+                        {/if}
                      {/each}
                   </tbody>
                </table>
             </div>
 
             <p class="leyenda">
-               <strong>Ses.</strong> veces que se abrió para trabajar ·
-               <strong>Edic.</strong> cambios hechos ·
-               <strong>Pegar</strong> intentos de pegar que la app bloqueó ·
+               <strong>Hechos</strong> ejercicios con contenido ·
+               <strong>Ses.</strong> veces que se abrió el cuaderno ·
+               <strong>ed.</strong> cambios hechos ·
+               la columna de pegar cuenta los intentos que la app bloqueó ·
                <strong>alterado</strong> el encabezado no coincide con la firma.
             </p>
          {/if}
@@ -298,8 +426,8 @@
    }
 
    .caja {
-      width: min(900px, 100%);
-      max-height: min(92dvh, 800px);
+      width: min(940px, 100%);
+      max-height: min(92dvh, 820px);
       background: var(--superficie);
       border: 1px solid var(--borde);
       border-radius: 14px;
@@ -411,10 +539,19 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
    }
-   .alumnos {
+   .implicados {
       font-size: 14px;
-      font-weight: 600;
       color: var(--texto);
+   }
+   .quien {
+      font-weight: 600;
+   }
+   .donde {
+      color: var(--texto-tenue);
+      font-size: 13px;
+   }
+   .sep {
+      color: var(--texto-debil);
    }
    .senal p {
       margin: 0;
@@ -429,8 +566,6 @@
    }
 
    .tabla-envoltura {
-      /* La tabla se desborda en pantallas estrechas; se desplaza en su caja
-         para no romper el ancho del diálogo. */
       overflow-x: auto;
    }
 
@@ -461,6 +596,17 @@
       text-align: right;
       font-variant-numeric: tabular-nums;
    }
+   .sitio {
+      width: 28px;
+      padding-right: 0;
+   }
+   .oculto {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+   }
 
    td small {
       display: block;
@@ -469,8 +615,43 @@
       font-family: var(--fuente-mono);
    }
 
-   tr.senalada td {
+   tr.entrega.senalada td {
       background: color-mix(in srgb, var(--error) 8%, transparent);
+   }
+
+   /* Las filas de ejercicio se leen como detalle, no como iguales. */
+   tr.ejercicio td {
+      background: var(--fondo);
+      font-size: 12.5px;
+      color: var(--texto-tenue);
+      border-bottom-color: transparent;
+   }
+   .nombre-ejercicio {
+      color: var(--texto);
+   }
+   .pos {
+      font-family: var(--fuente-mono);
+      font-size: 11px;
+      color: var(--texto-debil);
+      margin-right: 7px;
+   }
+
+   .desplegar {
+      border: 0;
+      background: transparent;
+      color: var(--texto-tenue);
+      cursor: pointer;
+      font-size: 11px;
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+   }
+   .desplegar:hover:not(:disabled) {
+      background: var(--superficie-alta);
+   }
+   .desplegar:disabled {
+      opacity: 0.3;
+      cursor: default;
    }
 
    .enlace {
@@ -489,7 +670,6 @@
       display: flex;
       flex-wrap: wrap;
       gap: 4px;
-      border-bottom: 1px solid var(--borde);
    }
    .estado span {
       font-size: 11px;
@@ -509,6 +689,10 @@
    .bien {
       color: var(--texto-debil);
       border: 1px solid var(--borde);
+   }
+   .vacio {
+      color: var(--texto-debil);
+      font-style: italic;
    }
    .alerta {
       color: var(--error);

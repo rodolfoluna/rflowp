@@ -1,3 +1,6 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>RFlowP para el profesor</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -244,6 +247,7 @@
    }
    .fuerza.alta { color: var(--alerta); }
    .fuerza.media { color: var(--aviso); }
+   .fuerza.baja { color: var(--tinta-tenue); }
 
    .avisos {
       display: grid;
@@ -305,7 +309,7 @@
       display: inline-block;
    }
 
-   @page { margin: 12mm; }
+   @page { margin: 9mm; }
 
    @media print {
       :root {
@@ -322,16 +326,21 @@
          --alerta-hueco: #ffffff;
          --acento-hueco: #ffffff;
       }
-      body { font-size: 10.2pt; line-height: 1.36; }
-      .hoja { padding: 0; gap: 12px; max-width: none; }
+      /* Apretado a propósito: esta hoja lleva más contenido que la de alumnos y
+         aun así debe caber en el menor número de páginas tamaño carta. Al
+         agregar contenido, medir antes de darla por buena. */
+      body { font-size: 10.2pt; line-height: 1.32; }
+      .hoja { padding: 0; gap: 9px; max-width: none; }
       h1 { font-size: 26pt; }
       .entrada { font-size: 10.6pt; }
-      ol.pasos { gap: 11px 22px; }
+      ol.pasos { gap: 9px 22px; }
       ol.pasos h2 { font-size: 11.4pt; }
       ol.pasos .cuerpo { font-size: 9.6pt; }
-      table { font-size: 9.2pt; }
-      .aviso { border-left-width: 2.5px; padding: 8px 11px; break-inside: avoid; }
-      .aviso p, .aviso ul { font-size: 9.2pt; }
+      table { font-size: 8.9pt; }
+      th, td { padding-top: 3px; padding-bottom: 3px; }
+      .avisos { gap: 9px; }
+      .aviso { border-left-width: 2.5px; padding: 6px 11px; break-inside: avoid; }
+      .aviso p, .aviso ul { font-size: 8.9pt; }
       ol.pasos > li, .senales { break-inside: avoid; }
    }
 </style>
@@ -381,7 +390,7 @@
       </li>
 
       <li>
-         <h2>Reparte la pública el primer día</h2>
+         <h2>Reparte la llave y las tareas</h2>
          <div class="cuerpo">
             <p>
                Antes de que nadie empiece a trabajar. Dales el archivo público por el medio que
@@ -391,6 +400,11 @@
                Diles que la importen desde <em>Llave del curso</em> → <em>Importar llave</em>, y
                que te confirmen la <strong>huella</strong> que aparece: debe ser idéntica a la tuya.
             </p>
+            <p>
+               Cada tarea repártela como <strong>plantilla</strong>: ármala como un cuaderno y
+               menú <kbd>⋮</kbd> → <em>Crear plantilla</em>. Va sin cifrar, y enlaza el ejercicio
+               3 de Ana con el de Luis aunque los renombren.
+            </p>
          </div>
       </li>
 
@@ -398,8 +412,9 @@
          <h2>Recibe las entregas</h2>
          <div class="cuerpo">
             <p>
-               Cada alumno exporta un archivo <code>.algx</code> con su número de control en el
-               nombre. Recógelos como recojas todo lo demás: correo, Classroom, USB.
+               Cada alumno exporta <strong>un</strong> archivo <code>.algx</code> con todos los
+               ejercicios y su número de control en el nombre. Recógelos como recojas todo lo
+               demás: correo, Classroom, USB.
             </p>
             <p>Van cifrados; solo tú y su autor pueden abrirlos.</p>
          </div>
@@ -413,8 +428,9 @@
                selecciona todos los archivos de una vez.
             </p>
             <p>
-               Arriba salen los grupos que conviene mirar; abajo, la tabla con la evidencia de
-               cada trabajo. Toca el nombre de un alumno para abrir su algoritmo y ejecutarlo.
+               Arriba salen los grupos que conviene mirar; abajo, una fila por entrega.
+               Despliégala con <kbd>▸</kbd> para ver ejercicio por ejercicio. Toca el nombre de
+               un alumno para abrir su cuaderno y ejecutarlo.
             </p>
          </div>
       </li>
@@ -468,6 +484,14 @@
                   el número de control o la fecha después de generarlo.
                </td>
                <td class="fuerza alta">Fuerte</td>
+            </tr>
+            <tr>
+               <td>Otro enunciado</td>
+               <td>
+                  El cuaderno salió de tu plantilla pero sus enunciados ya no son los que
+                  repartiste. Casi siempre es un despiste, no una copia.
+               </td>
+               <td class="fuerza baja">Contexto</td>
             </tr>
             <tr>
                <td>Poco trabajo / revisar</td>
