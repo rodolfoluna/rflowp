@@ -53,6 +53,7 @@
    } from './crypto/llaves';
    import { APP_VERSION } from './ui/version';
    import { PreferenciaTema } from './ui/tema.svelte';
+   import { leerConsolaAbierta, recordarConsolaAbierta } from './ui/preferencias';
 
    type Vista = 'codigo' | 'diagrama';
    type LineaSalida = { texto: string; tipo: 'salida' | 'error' | 'info' };
@@ -119,6 +120,15 @@
    /** Cuando no es null, se está renombrando ese ejercicio. */
    let renombrando = $state<{ id: string; nombre: string } | null>(null);
    let enunciadoAbierto = $state(true);
+   /**
+    * La consola se puede plegar y queda solo su barra.
+    *
+    * En un teléfono se llevaba un cuarto de la pantalla estando vacía, y ese
+    * cuarto es justo el que le falta al diagrama y al inspector. La elección
+    * se recuerda entre sesiones; ejecutar la abre sola, pero sin sobrescribir
+    * lo que el alumno eligió.
+    */
+   let consolaAbierta = $state(leerConsolaAbierta());
    let borrandoDatos = $state(false);
    /** Cuando no es null, se está pidiendo un título para guardar. */
    let pidiendoTitulo = $state<{ como: boolean } | null>(null);
@@ -516,6 +526,9 @@
       ejecutando = true;
       nodoActivo = undefined;
       nodoSeleccionado = undefined;
+      // Quien pulsa «Ejecutar» quiere ver la salida: si la consola estaba
+      // plegada se abre, y no se guarda —al recargar vuelve a su elección—.
+      consolaAbierta = true;
 
       const gen = run(doc.programa);
       let pendiente: string | undefined;
@@ -799,22 +812,40 @@
       </section>
    </main>
 
-   <section class="consola" aria-label="Salida del algoritmo">
+   <section class="consola" class:plegada={!consolaAbierta} aria-label="Salida del algoritmo">
       <div class="consola-barra">
-         <span>Consola</span>
-         <button onclick={() => (salida = [])} disabled={salida.length === 0}>Limpiar</button>
+         <button
+            class="alternar"
+            onclick={() => {
+               consolaAbierta = !consolaAbierta;
+               recordarConsolaAbierta(consolaAbierta);
+            }}
+            aria-expanded={consolaAbierta}
+         >
+            <span class="flecha" aria-hidden="true">{consolaAbierta ? '▾' : '▸'}</span>
+            <span>Consola</span>
+            {#if !consolaAbierta && salida.length > 0}
+               <!-- Plegada, el número avisa de que hay salida que no se ve. -->
+               <span class="cuenta">{salida.length}</span>
+            {/if}
+         </button>
+         <button class="limpiar" onclick={() => (salida = [])} disabled={salida.length === 0}>
+            Limpiar
+         </button>
       </div>
-      <div class="consola-texto">
-         {#if salida.length === 0}
-            <p class="vacio">
-               Toca un <strong>+</strong> del diagrama para agregar un bloque, o presiona
-               «Ejecutar».
-            </p>
-         {/if}
-         {#each salida as l, i (i)}
-            <div class={l.tipo}>{l.texto}</div>
-         {/each}
-      </div>
+      {#if consolaAbierta}
+         <div class="consola-texto">
+            {#if salida.length === 0}
+               <p class="vacio">
+                  Toca un <strong>+</strong> del diagrama para agregar un bloque, o presiona
+                  «Ejecutar».
+               </p>
+            {/if}
+            {#each salida as l, i (i)}
+               <div class={l.tipo}>{l.texto}</div>
+            {/each}
+         </div>
+      {/if}
    </section>
 
    {#if insercionPendiente}
@@ -1227,9 +1258,18 @@
       pointer-events: none;
    }
 
-   /* Inspector: panel lateral en PC, hoja inferior en móvil. */
+   /*
+    * Inspector: panel lateral en PC, hoja inferior en móvil.
+    *
+    * Va como contenedor flex para que el panel de dentro se comprima hasta el
+    * tope de alto en vez de desbordarlo. Sin esto, en móvil el alto lo ponía
+    * el contenido, el cuerpo no tenía de dónde desplazarse y el pie —donde
+    * vive «Eliminar»— quedaba recortado por el `overflow: hidden`.
+    */
    .inspector {
       position: absolute;
+      display: flex;
+      flex-direction: column;
       right: 0;
       top: 0;
       bottom: 0;
@@ -1248,16 +1288,58 @@
       border-top: 1px solid var(--borde);
       background: var(--superficie);
    }
+   /* Plegada queda solo la barra, y el alto que suelta se lo lleva el editor. */
+   .consola.plegada {
+      height: auto;
+      max-height: none;
+   }
    .consola-barra {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 10px;
       padding: 7px 14px;
       font-size: 12px;
       color: var(--texto-tenue);
       text-transform: uppercase;
       letter-spacing: 0.05em;
       border-bottom: 1px solid var(--borde);
+   }
+   .consola.plegada .consola-barra {
+      border-bottom: 0;
+      /* Plegada, esta barra es el borde de la pantalla: respeta los gestos. */
+      padding-bottom: max(7px, env(safe-area-inset-bottom));
+   }
+   /* La etiqueta es el propio interruptor: un blanco ancho y evidente. */
+   .consola-barra .alternar {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      background: transparent;
+      color: var(--texto-tenue);
+      font-family: inherit;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      text-align: left;
+      cursor: pointer;
+      /* Alto tocable con el pulgar sin engordar la barra. */
+      min-height: 30px;
+      padding: 0;
+      margin: -3px 0;
+   }
+   .consola-barra .flecha {
+      font-size: 10px;
+      letter-spacing: 0;
+   }
+   .consola-barra .cuenta {
+      font-family: var(--fuente-mono);
+      font-size: 11px;
+      letter-spacing: 0;
+      color: var(--texto-debil);
    }
    .consola-barra button {
       border: 1px solid var(--borde);
@@ -1274,10 +1356,15 @@
       opacity: 0.4;
       cursor: default;
    }
+   .consola-barra .limpiar {
+      flex-shrink: 0;
+   }
    .consola-texto {
       flex: 1;
+      min-height: 0;
       overflow: auto;
       padding: 10px 14px;
+      padding-bottom: max(10px, env(safe-area-inset-bottom));
       font-family: var(--fuente-mono);
       font-size: 13px;
       line-height: 1.55;

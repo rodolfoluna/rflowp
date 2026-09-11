@@ -704,12 +704,20 @@
       cursor: default;
    }
 
+   /*
+    * El pie se queda fijo mientras el cuerpo se desplaza: «Eliminar» y las
+    * flechas son lo que más se busca y no pueden depender de haber leído
+    * hasta el final del formulario.
+    */
    footer {
       display: flex;
       gap: 8px;
       padding: 12px 14px;
+      /* En un teléfono sin bordes, la barra de gestos se come este borde. */
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
       border-top: 1px solid var(--borde);
       flex-shrink: 0;
+      background: var(--superficie);
    }
    footer button {
       border: 1px solid var(--borde);
