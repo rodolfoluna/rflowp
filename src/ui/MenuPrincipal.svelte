@@ -12,6 +12,10 @@
 
    interface Props {
       identidad: Identidad;
+      /** Código de identidad, para comparar con el del otro aparato. */
+      codigo: string | null;
+      /** Una entrega ajena abierta por el profesor: no se guarda ni se exporta. */
+      soloLectura: { nombre: string } | null;
       /** Título del algoritmo abierto, si hay uno guardado. */
       tituloActual: string;
       hayArchivoAbierto: boolean;
@@ -40,6 +44,8 @@
 
    let {
       identidad,
+      codigo,
+      soloLectura,
       tituloActual,
       hayArchivoAbierto,
       onGuardar,
@@ -98,16 +104,27 @@
       {hayArchivoAbierto ? `Trabajando en «${tituloActual}»` : 'Este algoritmo no se ha guardado'}
    </p>
 
+   {#if codigo}
+      <p class="codigo">
+         Código de identidad <strong>{codigo}</strong>
+         <small>Debe ser el mismo en todos tus aparatos.</small>
+      </p>
+   {/if}
+
    <div class="grupo">
-      <button onclick={onGuardar}>
+      <button onclick={onGuardar} disabled={soloLectura !== null}>
          <span class="icono" aria-hidden="true">💾</span>
          <span class="texto">
             <strong>{hayArchivoAbierto ? 'Guardar' : 'Guardar…'}</strong>
-            <small>Conserva el algoritmo dentro de la app</small>
+            <small>
+               {soloLectura
+                  ? `Entrega de ${soloLectura.nombre}: solo lectura`
+                  : 'Conserva el algoritmo dentro de la app'}
+            </small>
          </span>
       </button>
 
-      {#if hayArchivoAbierto}
+      {#if hayArchivoAbierto && !soloLectura}
          <button onclick={onGuardarComo}>
             <span class="icono" aria-hidden="true">📄</span>
             <span class="texto">
@@ -117,7 +134,7 @@
          </button>
       {/if}
 
-      <button onclick={onExportar}>
+      <button onclick={onExportar} disabled={soloLectura !== null}>
          <span class="icono" aria-hidden="true">⤓</span>
          <span class="texto">
             <strong>Exportar .algx</strong>
@@ -308,6 +325,33 @@
       font-size: 12px;
       color: var(--texto-tenue);
       font-family: var(--fuente-mono);
+   }
+
+   .codigo {
+      margin: 0;
+      padding: 0 2px;
+      font-size: 12px;
+      color: var(--texto-tenue);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 2px 8px;
+   }
+   .codigo strong {
+      font-family: var(--fuente-mono);
+      font-size: 13.5px;
+      letter-spacing: 0.06em;
+      color: var(--texto);
+   }
+   .codigo small {
+      flex-basis: 100%;
+      font-size: 11.5px;
+      color: var(--texto-debil);
+   }
+
+   .grupo button:disabled {
+      opacity: 0.45;
+      cursor: default;
    }
 
    .documento {

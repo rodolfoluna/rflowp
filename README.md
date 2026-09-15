@@ -18,13 +18,15 @@ Conviene que el profesor lo entienda con precisión antes de apoyarse en ello.
 
 **Lo que sí es sólido**, porque es criptografía estándar:
 
-- Un alumno **no puede abrir el archivo de otro**. Cada archivo se cifra con una
-  llave nueva, envuelta con la llave maestra del autor —que es *no exportable*:
-  ni desde las herramientas del navegador se puede copiar a otro dispositivo—.
+- Un alumno **no puede abrir el archivo de otro**, aunque sepa su número de
+  control. Cada archivo se cifra con una llave nueva, envuelta con la llave
+  maestra del autor, que se calcula con su **número de control y su PIN**.
+- El alumno **abre lo suyo en cualquiera de sus aparatos** con el mismo número y
+  PIN, sin servidor y sin que la llave viaje.
+- **Nadie guarda un archivo con otro número de control**: el número entra en la
+  llave, la biblioteca se niega a sobrescribir un archivo ajeno, y las entregas
+  que abre el profesor quedan en solo lectura.
 - El **profesor abre cualquier entrega** de su curso, con su llave privada.
-- **Borrar los datos deja los archivos ilegibles para el alumno**, y de forma
-  irreversible: volver a escribir el mismo nombre y número de control no
-  recupera nada, porque la llave se destruyó.
 - **Alterar un archivo se detecta**: tocar el texto cifrado impide abrirlo, y
   tocar el encabezado (nombre, número de control, fechas) invalida la firma.
 
@@ -37,6 +39,9 @@ Conviene que el profesor lo entienda con precisión antes de apoyarse en ello.
   quiera. Es tamper-evidence y trazabilidad, no autenticación.
 - El bloqueo de copiar/pegar es **fricción, no una barrera**: quien sepa abrir
   las herramientas del navegador lo desactiva en un minuto.
+- Un **PIN de 6 dígitos** son un millón de posibilidades, y quien tenga el
+  `.algx` de otro puede probarlas todas sin límite. Argon2id con 64 MiB lo lleva
+  de minutos a días, pero **es disuasión, no protección**.
 
 **Dónde está el valor real contra la copia:** en la *trazabilidad*, y son dos
 señales distintas.
@@ -71,6 +76,7 @@ bundle tiene rendimientos decrecientes y cuesta accesibilidad.
 | 5 | Cifrado y modo profesor | **Hecho** |
 | 6 | Anti-copia, bitácora y revisión de entregas | **Hecho** |
 | 7 | Cuadernos de varios ejercicios y plantillas `.algxp` | **Hecho** |
+| 8 | Abrir lo propio en otro aparato: número de control + PIN | **Hecho** |
 
 Ahora mismo la app **edita en las dos direcciones**: se escribe pseudocódigo y
 el diagrama se redibuja, o se arma el diagrama tocando símbolos y el
@@ -262,8 +268,12 @@ el panel en un rollo que no se puede usar con el pulgar.
 
 ## Identidad y archivos
 
-- En el primer arranque se piden **número de control y nombre**. No hay cuenta
-  ni servidor: quedan en el dispositivo y viajan dentro de cada `.algx`.
+- En el primer arranque en cada aparato se piden **número de control, nombre y
+  PIN**. No hay cuenta ni servidor: número y nombre viajan dentro de cada
+  `.algx`; el PIN no se guarda en ningún lado, solo calcula la llave.
+- Tras entrar se muestra el **código de identidad** (`2XF3-JK6U`). En un aparato
+  nuevo no hay contra qué comprobar el PIN y uno mal tecleado daría otra llave en
+  silencio: si el código coincide con el del otro aparato, el PIN está bien.
 - El número de control se acepta con el formato de cualquier escuela (letras y
   dígitos, 4 a 20 caracteres); casarse con un formato dejaría la app inservible
   para otra institución.
@@ -274,9 +284,10 @@ el panel en un rollo que no se puede usar con el pulgar.
   título dentro: así renombrar no mueve archivos ni pisa otro que se llame igual.
 - **Borrador automático**: el trabajo en curso se guarda cada 1,2 s y se
   recupera al volver a abrir, aunque tenga errores de sintaxis.
-- **Borrar mis datos** exige escribir `BORRAR`, dice exactamente qué se pierde y
-  —hoy— advierte con honestidad que los `.algx` ya exportados **no** están
-  protegidos. Ese texto cambia cuando exista el cifrado.
+- **Borrar mis datos** exige escribir `BORRAR` y dice exactamente qué se pierde.
+  Con PIN, los archivos vuelven a abrirse entrando con número y PIN. La firma y el
+  `deviceId` **se quedan**: son del aparato, y borrar para entrar como otro no
+  debe borrar el rastro.
 - Exportar no obliga a guardar antes: construye el archivo al vuelo, porque es
   el paso que el alumno olvidaría justo al entregar.
 
@@ -336,14 +347,36 @@ por ejemplo) sin tocar el formato.
 
 | Llave | Dónde vive | Exportable | Por qué |
 |---|---|---|---|
-| Maestra del alumno (AES-KW) | IndexedDB | **No** | Impide copiar la identidad a otro dispositivo o prestársela a un compañero |
-| Firma del alumno (ECDSA P-256) | IndexedDB | **No** | Su pública va en cada archivo y es la huella que enlaza entregas |
+| Maestra del alumno (AES-KW) | Calculada con número + PIN; en IndexedDB para no pedir el PIN cada vez | **No** | La misma en todos los aparatos del alumno, y ningún compañero la obtiene sin el PIN |
+| Firma del aparato (ECDSA P-256) | IndexedDB | **No** | **No se deriva del PIN, a propósito**: si Luis usa el PIN de Ana, la entrega sale con la huella de su teléfono y el panel lo ve |
+| Legado (AES-KW) | IndexedDB | **No** | La aleatoria de antes del PIN, solo para abrir lo que se cifró con ella |
 | Del profesor (ECDH P-256) | Archivo + IndexedDB | **Sí** | Tiene que poder respaldarla; sin respaldo, perder el equipo es perder el curso |
 
-**No hay frase de respaldo para el alumno, a propósito**: una frase que se puede
-guardar es una frase que se puede prestar, y con ella se prestaría la identidad
-entera. La autoridad de recuperación es el profesor, que puede abrir cualquier
-entrega y devolvérsela al alumno.
+### Número de control + PIN
+
+```
+sal     = SHA-256("RFlowP/alumno/v1|" + número de control normalizado)
+bytes   = Argon2id(PIN, sal, 64 MiB, 3 pasadas)     — en un Web Worker
+maestra = HKDF(bytes, "maestra") → AES-KW            — no exportable
+código  = HKDF(bytes, "codigo")  → «2XF3-JK6U»
+```
+
+- **Argon2id y no PBKDF2** porque el PIN es corto: PBKDF2 en una tarjeta gráfica
+  recorre el millón de PINs en minutos; Argon2id exige memoria por intento.
+- Corre en un **Web Worker**: tarda uno o dos segundos en un teléfono modesto, y
+  en el hilo principal eso era la pantalla congelada justo al pulsar «Empezar».
+- El sobre guarda `llave: 'argon2id-v1'` para poder cambiar los parámetros más
+  adelante sin romper lo anterior.
+
+**Archivos de antes del PIN.** Siguen abriéndose en su aparato con la llave de
+legado. Para abrirse en otro hay que **convertirlos** —volver a cifrarlos con la
+llave del PIN—: pasa al guardar, y al crear el PIN se ofrece convertirlos todos.
+Se conservan contenido, bitácora, autor, fechas y huella de firma. Lo hecho en
+otro aparato antes del PIN solo se convierte desde aquel. El profesor los abre
+siempre.
+
+**Si el alumno olvida el PIN** no hay recuperación: no hay servidor que la haga.
+El profesor abre sus entregas en solo lectura.
 
 ### La llave incluida con la app
 
@@ -463,6 +496,10 @@ la volvería inútil como evidencia.
   al final de un bloque, y el conteo se conserva.
 - **Identidad**: se aceptan formatos de varias escuelas, se normaliza el número
   de control, y dos identidades con el mismo número tienen `deviceId` distinto.
+- **PIN**: lo cifrado en un aparato se abre en otro con el mismo número y PIN;
+  otro PIN u otro número no abren; lo viejo se convierte conservando evidencia;
+  nadie sobrescribe un archivo de otro número; y usar el PIN de otro en tu
+  teléfono deja tu huella y el panel lo señala.
 - **Llave incluida**: es una pública válida, sirve para cifrar, **no contiene
   la parte privada** (una prueba lo comprueba explícitamente, para que nadie
   pegue ahí una privada por descuido), y la que el profesor importe la sustituye.

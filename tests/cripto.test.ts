@@ -115,7 +115,7 @@ describe('quién puede abrir qué', () => {
 
       // Luis se lo pasa a su propia app.
       const idEnLuis = await luis.bib.importar(texto);
-      await expect(luis.bib.abrir(idEnLuis)).rejects.toThrow(/otra persona|ya no puede abrirlo/);
+      await expect(luis.bib.abrir(idEnLuis)).rejects.toThrow(/otra persona/);
    });
 
    it('el profesor abre el archivo de cualquier alumno', async () => {
@@ -213,7 +213,7 @@ describe('borrar los datos deja los archivos ilegibles para el alumno', () => {
 
       // «Borrar mis datos»: se destruye la llave maestra.
       contexto = { alumno: null, profesorPublica: null, profesorPrivada: null };
-      await expect(bib.abrir(id)).rejects.toThrow(/ya no puede abrirlo/);
+      await expect(bib.abrir(id)).rejects.toThrow(/no se abre con tu número de control/);
 
       // Aunque genere llaves nuevas, no recupera el acceso: es lo que hace real
       // la advertencia del diálogo de borrado.

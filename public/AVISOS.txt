@@ -14,9 +14,12 @@ no afecta a nada de lo que sigue.
 
   1. Svelte .................. MIT ............ incluido en la aplicación
   2. Workbox ................. MIT ............ incluido en el service worker
-  3. PseudoFlow .............. BSD 3-Clause ... material adaptado
-  4. Herramientas de compilación .............. no se distribuyen
-  5. Tipografías de la documentación .......... no se distribuyen
+  3. hash-wasm ............... MIT ............ incluido en la aplicación
+     · Argon2, basado en Go .. BSD 3-Clause ... incluido en la aplicación
+     · BLAKE2b ............... CC0 ............ incluido en la aplicación
+  4. PseudoFlow .............. BSD 3-Clause ... material adaptado
+  5. Herramientas de compilación .............. no se distribuyen
+  6. Tipografías de la documentación .......... no se distribuyen
 
 
 ================================================================================
@@ -70,7 +73,85 @@ THE SOFTWARE.
 
 
 ================================================================================
-3. PSEUDOFLOW
+3. HASH-WASM
+================================================================================
+
+Calcula la llave del alumno a partir de su número de control y su PIN, con el
+algoritmo Argon2id. Su código de ejecución, en WebAssembly, forma parte de la
+aplicación que se descarga.
+
+Proyecto: https://github.com/Daninet/hash-wasm
+Licencia: MIT
+
+MIT License
+
+Copyright (c) 2020 Dani Biró
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+3.1 Argon2 de hash-wasm, basado en la implementación del lenguaje Go
+---------------------------------------------------------------------
+
+La implementación de Argon2 de hash-wasm está basada en la del paquete
+golang.org/x/crypto, que se distribuye bajo esta licencia:
+
+Copyright 2009 The Go Authors.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google LLC nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+3.2 BLAKE2b
+-----------
+
+Argon2 usa BLAKE2b internamente. hash-wasm incluye la implementación de
+referencia, Copyright 2012 Samuel Neves, que se ofrece a elegir bajo CC0, la
+licencia de OpenSSL o Apache 2.0. RFlowP la usa bajo CC0 1.0 Universal
+(https://creativecommons.org/publicdomain/zero/1.0/), que no impone condiciones.
+
+
+================================================================================
+4. PSEUDOFLOW
 ================================================================================
 
 RFlowP partió de PseudoFlow, de Victor Talamantes. No se reutilizó su código
@@ -117,7 +198,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ================================================================================
-4. HERRAMIENTAS DE COMPILACIÓN
+5. HERRAMIENTAS DE COMPILACIÓN
 ================================================================================
 
 Vite, TypeScript, Vitest, Sass, lightningcss, caniuse-lite y el resto de
@@ -134,7 +215,7 @@ distribuyen ni se han modificado.
 
 
 ================================================================================
-5. TIPOGRAFÍAS DE LA DOCUMENTACIÓN
+6. TIPOGRAFÍAS DE LA DOCUMENTACIÓN
 ================================================================================
 
 Los instructivos de docs/ usan Bricolage Grotesque, Public Sans e IBM Plex Mono,

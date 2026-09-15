@@ -40,6 +40,7 @@ import {
    type Bytes,
    type Compresion,
 } from './bytes';
+import type { TipoLlave } from './identidad-llave';
 
 /** Identificador del esquema, tal como aparece en el campo `alg`. */
 export const ESQUEMA = 'A256GCM+ECIES-P256';
@@ -65,6 +66,16 @@ export interface Sobre {
    /** Pública ECDSA del alumno, para verificar la firma y enlazar entregas. */
    firmaPub: JsonWebKey;
    firma: string;
+   /**
+    * Con qué llave del alumno se envolvió la CEK.
+    *
+    * `'aparato'` es la aleatoria de antes del PIN, que no sale del aparato;
+    * `'argon2id-v1'`, la calculada con número de control y PIN, que se obtiene
+    * igual en cualquier aparato. Falta en los archivos anteriores: se lee como
+    * `'aparato'`. No es secreto ni va firmado: al abrir se prueban todas las
+    * llaves igual, y esto solo dice si el archivo está pendiente de convertir.
+    */
+   llave?: TipoLlave;
 }
 
 export class ErrorCripto extends Error {
@@ -144,6 +155,8 @@ export interface OpcionesCifrado {
     * Encabezado en claro, ya serializado de forma canónica. Entra en la firma.
     */
    encabezadoCanonico: string;
+   /** Qué clase de llave es `llaveAlumno`. Por omisión, la del aparato. */
+   tipoLlave?: TipoLlave;
 }
 
 export async function cifrar(opciones: OpcionesCifrado): Promise<Sobre> {
@@ -193,6 +206,7 @@ export async function cifrar(opciones: OpcionesCifrado): Promise<Sobre> {
       sobreProfesor,
       firmaPub: opciones.firmaPublica,
       firma: bytesABase64(firma),
+      llave: opciones.tipoLlave ?? 'aparato',
    };
 }
 
@@ -208,6 +222,11 @@ export interface OpcionesDescifrado {
    encabezadoCanonico: string;
    /** Llave maestra del alumno, si esta instalación tiene una. */
    llaveAlumno?: CryptoKey | null;
+   /**
+    * Más llaves del alumno para probar, en orden. Sirve para abrir lo que se
+    * cifró con la llave del aparato antes de que el alumno creara su PIN.
+    */
+   otrasLlavesAlumno?: Array<CryptoKey | null>;
    /** Privada ECDH del profesor, si está en modo profesor. */
    profesorPrivada?: CryptoKey | null;
 }
@@ -225,14 +244,17 @@ async function abrirCek(opciones: OpcionesDescifrado): Promise<{
 }> {
    const { sobre } = opciones;
 
-   // Se intenta primero con la llave del alumno: es el caso normal, y evita
-   // trabajo de curva elíptica cuando no hace falta.
-   if (opciones.llaveAlumno) {
+   // Se intenta primero con las llaves del alumno: es el caso normal, y evita
+   // trabajo de curva elíptica cuando no hace falta. AES-KW comprueba su propia
+   // integridad, así que una llave equivocada falla en vez de dar basura.
+   const llavesAlumno = [opciones.llaveAlumno, ...(opciones.otrasLlavesAlumno ?? [])];
+   for (const llave of llavesAlumno) {
+      if (!llave) continue;
       try {
          const cek = await crypto.subtle.unwrapKey(
             'raw',
             base64ABytes(sobre.sobreAlumno),
-            opciones.llaveAlumno,
+            llave,
             'AES-KW',
             { name: 'AES-GCM', length: 256 },
             false,
@@ -240,7 +262,7 @@ async function abrirCek(opciones: OpcionesDescifrado): Promise<{
          );
          return { cek, como: 'alumno' };
       } catch {
-         // No es de esta instalación. Se sigue con la llave del profesor.
+         // No es esta llave. Se prueba la siguiente y luego la del profesor.
       }
    }
 
@@ -272,7 +294,7 @@ async function abrirCek(opciones: OpcionesDescifrado): Promise<{
    }
 
    throw new ErrorCripto(
-      'Este algoritmo lo hizo otra persona o se creó antes de que borraras tus datos, así que esta app ya no puede abrirlo. Tu profesor sí puede.',
+      'Este archivo no se abre con tu número de control y tu PIN. O es de otra persona, o en este aparato escribiste otro PIN: compara tu código de identidad con el de tu otro aparato. Tu profesor sí puede abrirlo.',
    );
 }
 

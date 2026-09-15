@@ -2,9 +2,10 @@
    /**
     * Pantalla «Acerca de»: versión y avisos de terceros.
     *
-    * No es adorno, es una obligación de licencia. La app incorpora Svelte y
-    * Workbox (MIT) y material adaptado de PseudoFlow (BSD 3-Clause), y las tres
-    * licencias exigen que su aviso de copyright acompañe a la distribución.
+    * No es adorno, es una obligación de licencia. La app incorpora Svelte,
+    * Workbox y hash-wasm (MIT), el Argon2 de Go que usa hash-wasm y material
+    * adaptado de PseudoFlow (BSD 3-Clause), y esas licencias exigen que su
+    * aviso de copyright acompañe a la distribución.
     * Tenerlo solo en el repositorio no basta: lo que se distribuye es la
     * aplicación, así que el aviso tiene que ser alcanzable desde ella.
     */
@@ -55,6 +56,10 @@
                <li>
                   <strong>Workbox</strong> <span>MIT</span>
                   <small>© 2018 Google LLC</small>
+               </li>
+               <li>
+                  <strong>hash-wasm</strong> <span>MIT</span>
+                  <small>© 2020 Dani Biró — Argon2 basado en Go (BSD 3-Clause, © 2009 The Go Authors)</small>
                </li>
                <li>
                   <strong>PseudoFlow</strong> <span>BSD 3-Clause</span>

@@ -12,6 +12,8 @@
    import EditorSentencia from './edit/EditorSentencia.svelte';
    import Bienvenida from './identity/Bienvenida.svelte';
    import BorrarDatos from './identity/BorrarDatos.svelte';
+   import CrearPin from './identity/CrearPin.svelte';
+   import CodigoIdentidad from './identity/CodigoIdentidad.svelte';
    import PanelArchivos from './file/PanelArchivos.svelte';
    import MenuPrincipal from './ui/MenuPrincipal.svelte';
    import PedirTexto from './ui/PedirTexto.svelte';
@@ -47,10 +49,11 @@
       almacenLlavesIndexedDB,
       almacenProfesorIndexedDB,
       configIncluida,
-      generarLlavesAlumno,
+      llavesConPin,
       type ConfigProfesor,
       type LlavesAlumno,
    } from './crypto/llaves';
+   import { derivarLlaveEnSegundoPlano } from './crypto/identidad-llave';
    import { APP_VERSION } from './ui/version';
    import { PreferenciaTema } from './ui/tema.svelte';
    import { leerConsolaAbierta, recordarConsolaAbierta } from './ui/preferencias';
@@ -98,6 +101,32 @@
     */
    let avisoAlmacenamientoOculto = $state(false);
    let restauradoDeBorrador = false;
+
+   /**
+    * Una instalación de antes del PIN tiene que crearlo antes de seguir: todo
+    * lo que guarde a partir de ahí queda con la llave que sirve en cualquier
+    * aparato.
+    */
+   const faltaPin = $derived(identidad !== null && !llaves?.codigo);
+   /**
+    * La caja del PIN sigue abierta después de crearlo: tiene que enseñar el
+    * código y ofrecer convertir los archivos, y `faltaPin` ya es falso.
+    */
+   let pinEnCurso = $state(false);
+   /** Código recién creado al entrar, para mostrarlo una vez. */
+   let codigoRecienCreado = $state<string | null>(null);
+
+   /**
+    * La entrega de un alumno, abierta por el profesor.
+    *
+    * Solo lectura: se puede ejecutar y tocar en memoria, pero no guardar ni
+    * exportar. Antes, abrir una entrega y pulsar Guardar la sobrescribía a
+    * nombre del profesor y se perdía quién la había hecho.
+    */
+   let soloLectura = $state<{ nombre: string; numeroControl: string } | null>(null);
+
+   /** Nombre con que el alumno firmó en su otro aparato, si no coincide. */
+   let nombreDeOtroAparato = $state<string | null>(null);
 
    /** Archivo de la biblioteca que está abierto, si lo hay. */
    let archivoAbiertoId = $state<string | undefined>(undefined);
@@ -190,18 +219,11 @@
          configProfesor = await configIncluida();
       }
 
-      // Identidad sin llaves: pasó por una versión anterior al cifrado. Se le
-      // generan ahora para que pueda seguir trabajando.
-      if (identidad && !llaves) {
-         llaves = await generarLlavesAlumno();
-         try {
-            await almacenLlaves.guardar(llaves);
-         } catch {
-            sinAlmacenamiento = true;
-         }
-      }
+      // Identidad sin llaves (de antes del cifrado) o sin PIN (de antes de que
+      // los archivos se abrieran en otro aparato): `faltaPin` pide crearlo.
 
       if (identidad) {
+         biblioteca.titular = identidad.numeroControl;
          await biblioteca.refrescar(identidad.deviceId);
 
          // Recuperar el trabajo en curso. Se hace antes de mostrar nada para
@@ -238,6 +260,10 @@
       const archivoId = archivoAbiertoId;
 
       if (arrancando || !identidad) return;
+      // La entrega de un alumno abierta por el profesor no es trabajo en curso
+      // del profesor: recuperarla como borrador la dejaría a un Guardar de
+      // quedar a su nombre.
+      if (soloLectura) return;
 
       const temporizador = setTimeout(() => {
          void biblioteca.guardarBorrador({
@@ -254,24 +280,77 @@
       numeroControl: string;
       nombre: string;
       grupo?: string;
+      pin: string;
    }) {
-      const nueva = crearIdentidad(datos, () => crypto.randomUUID());
-      // Las llaves se generan junto con la identidad: son la misma cosa desde
-      // el punto de vista del alumno, y sin ellas no podría guardar nada.
-      const nuevasLlaves = await generarLlavesAlumno();
+      // Lo del aparato —firma y deviceId— se reutiliza si ya existía, por
+      // ejemplo tras «borrar mis datos»: así entrar como otro alumno en el mismo
+      // teléfono deja el mismo rastro en los archivos.
+      let aparato = null;
+      try {
+         aparato = await almacenLlaves.leerAparato();
+      } catch {
+         // Sin IndexedDB se trabaja con llaves nuevas en esta sesión.
+      }
+
+      const nueva = crearIdentidad(datos, () => aparato?.deviceId ?? crypto.randomUUID());
+      const derivada = await derivarLlaveEnSegundoPlano(nueva.numeroControl, datos.pin);
+      const nuevasLlaves = await llavesConPin(derivada, aparato);
 
       try {
          await almacenIdentidad.guardar(nueva);
-         await almacenLlaves.guardar(nuevasLlaves);
+         await almacenLlaves.guardar({ ...nuevasLlaves, deviceId: nueva.deviceId });
       } catch {
          sinAlmacenamiento = true;
       }
       llaves = nuevasLlaves;
+      codigoRecienCreado = derivada.codigo;
+      biblioteca.titular = nueva.numeroControl;
       identidad = nueva;
       // Se pide justo aquí, tras un gesto del usuario: es cuando el navegador
       // es más propenso a concederla.
       await pedirPersistencia();
       await biblioteca.refrescar(nueva.deviceId);
+   }
+
+   /** Crea el PIN en una instalación que ya existía. */
+   async function crearPin(pin: string): Promise<{ codigo: string; pendientes: number }> {
+      if (!identidad) throw new Error('No hay identidad.');
+      const derivada = await derivarLlaveEnSegundoPlano(identidad.numeroControl, pin);
+      // Las anteriores pasan a legado: lo ya guardado se sigue abriendo aquí.
+      const nuevas = await llavesConPin(derivada, llaves);
+      pinEnCurso = true;
+      try {
+         await almacenLlaves.guardar({ ...nuevas, deviceId: identidad.deviceId });
+      } catch {
+         sinAlmacenamiento = true;
+      }
+      llaves = nuevas;
+      await biblioteca.refrescar(identidad.deviceId);
+      return { codigo: derivada.codigo, pendientes: biblioteca.pendientesDeConvertir };
+   }
+
+   async function convertirArchivos() {
+      if (!identidad) throw new Error('No hay identidad.');
+      return biblioteca.convertirPendientes(identidad);
+   }
+
+   /** Adopta el nombre con que el alumno firmó en su otro aparato. */
+   async function usarNombreDeOtroAparato() {
+      if (!identidad || !nombreDeOtroAparato) return;
+      const actualizada = { ...identidad, nombre: nombreDeOtroAparato };
+      try {
+         await almacenIdentidad.guardar(actualizada);
+      } catch {
+         sinAlmacenamiento = true;
+      }
+      identidad = actualizada;
+      nombreDeOtroAparato = null;
+      anunciar(`Ahora firmas como «${actualizada.nombre}»`);
+   }
+
+   /** Lo abierto deja de ser una entrega ajena: se vuelve a poder guardar. */
+   function salirDeSoloLectura() {
+      soloLectura = null;
    }
 
    // -- Archivos ------------------------------------------------------------
@@ -285,6 +364,10 @@
 
    async function guardar(titulo?: string) {
       if (!identidad) return;
+      if (soloLectura) {
+         anunciar(`Es la entrega de ${soloLectura.nombre}: se puede ver, pero no guardar.`);
+         return;
+      }
 
       // Sin título previo hay que pedirlo: guardar en silencio con un nombre
       // inventado deja al alumno con una lista de «Sin título».
@@ -313,6 +396,21 @@
          const archivo = await biblioteca.abrir(id);
          cuaderno.cargar(archivo.contenido);
          archivoAbiertoId = id;
+
+         const autor = archivo.encabezado.autor;
+         soloLectura =
+            archivo.como === 'profesor' && autor.numeroControl !== identidad?.numeroControl
+               ? { nombre: autor.nombre, numeroControl: autor.numeroControl }
+               : null;
+
+         // Suyo, hecho en otro aparato con el nombre escrito de otra forma.
+         nombreDeOtroAparato =
+            archivo.como === 'alumno' &&
+            identidad &&
+            autor.numeroControl === identidad.numeroControl &&
+            autor.nombre !== identidad.nombre
+               ? autor.nombre
+               : null;
          tituloActual = archivo.encabezado.titulo;
          nodoSeleccionado = undefined;
          panelArchivos = false;
@@ -337,6 +435,7 @@
 
    function nuevoAlgoritmo() {
       cuaderno.reiniciar();
+      salirDeSoloLectura();
       archivoAbiertoId = undefined;
       tituloActual = 'Sin título';
       nodoSeleccionado = undefined;
@@ -362,6 +461,7 @@
       );
 
       abrirPlantilla = false;
+      salirDeSoloLectura();
       // Es una tarea nueva: no debe sobrescribir el archivo que estaba abierto.
       archivoAbiertoId = undefined;
       tituloActual = plantilla.nombre;
@@ -375,6 +475,7 @@
    async function reiniciarDocumento() {
       await biblioteca.borrarBorrador();
       cuaderno.reiniciar();
+      salirDeSoloLectura();
       archivoAbiertoId = undefined;
       tituloActual = 'Sin título';
       cronista.reiniciar();
@@ -389,6 +490,10 @@
    async function exportar() {
       if (!identidad) return;
       menuAbierto = false;
+      if (soloLectura) {
+         anunciar(`Es la entrega de ${soloLectura.nombre}: no se puede exportar a tu nombre.`);
+         return;
+      }
 
       try {
          const { encabezado, texto } = await biblioteca.construir({
@@ -410,10 +515,14 @@
 
    async function borrarDatos() {
       try {
+         // Lo del aparato se queda con su deviceId: es el rastro que delata dos
+         // entregas del mismo teléfono, y no debe borrarse con la identidad.
+         if (identidad && llaves) {
+            await almacenLlaves.guardarAparato({ ...llaves, deviceId: identidad.deviceId });
+         }
          await almacenIdentidad.borrar();
-         // Destruir la llave maestra es lo que hace real la advertencia del
-         // diálogo: sin ella, los archivos ya exportados dejan de abrirse en
-         // esta app, y solo el profesor puede recuperarlos.
+         // Se olvida la llave del alumno. Con PIN, sus archivos vuelven a
+         // abrirse entrando con su número y su PIN; sin PIN, solo el profesor.
          await almacenLlaves.borrar();
       } catch {
          // Si no se pudo tocar IndexedDB igual se limpia la sesión.
@@ -422,6 +531,7 @@
       await biblioteca.borrarTodo();
 
       await reiniciarDocumento();
+      biblioteca.titular = null;
       identidad = null;
       borrandoDatos = false;
       menuAbierto = false;
@@ -644,6 +754,14 @@
    <div class="arrancando">Cargando…</div>
 {:else if !identidad}
    <Bienvenida onListo={registrar} />
+{:else if identidad && (faltaPin || pinEnCurso)}
+   <CrearPin
+      numeroControl={identidad.numeroControl}
+      nombre={identidad.nombre}
+      onCrear={crearPin}
+      onConvertir={convertirArchivos}
+      onTerminar={() => (pinEnCurso = false)}
+   />
 {:else}
 <div class="app">
    <header>
@@ -721,6 +839,28 @@
             lo guardado se perderá al cerrar.
          </span>
          <button onclick={() => (avisoAlmacenamientoOculto = true)} aria-label="Ocultar el aviso">
+            ✕
+         </button>
+      </div>
+   {/if}
+
+   {#if soloLectura}
+      <div class="barra-solo-lectura" role="status">
+         <span>
+            Entrega de <strong>{soloLectura.nombre}</strong> ({soloLectura.numeroControl}) —
+            solo lectura. Puedes ejecutarla y probar cambios, pero no guardarla.
+         </span>
+      </div>
+   {/if}
+
+   {#if nombreDeOtroAparato}
+      <div class="barra-almacenamiento" role="status">
+         <span>
+            En tu otro aparato firmas como <strong>{nombreDeOtroAparato}</strong>. ¿Usar ese
+            nombre aquí también?
+            <button class="enlace" onclick={usarNombreDeOtroAparato}>Usarlo</button>
+         </span>
+         <button onclick={() => (nombreDeOtroAparato = null)} aria-label="Ocultar el aviso">
             ✕
          </button>
       </div>
@@ -869,6 +1009,8 @@
       <MenuPrincipal
          {identidad}
          {tituloActual}
+         codigo={llaves?.codigo ?? null}
+         {soloLectura}
          hayArchivoAbierto={archivoAbiertoId !== undefined}
          onGuardar={() => {
             menuAbierto = false;
@@ -1026,9 +1168,19 @@
          {identidad}
          guardados={biblioteca.archivos.length}
          hayLlaveDeProfesor={configProfesor?.publica != null}
+         tienePin={llaves?.codigo != null}
          onConfirmar={borrarDatos}
          onCancelar={() => (borrandoDatos = false)}
       />
+   {/if}
+
+   {#if codigoRecienCreado}
+      <div class="fondo-codigo" role="presentation">
+         <div class="caja-codigo" role="dialog" aria-modal="true" aria-label="Tu código de identidad">
+            <CodigoIdentidad codigo={codigoRecienCreado} />
+            <button onclick={() => (codigoRecienCreado = null)}>Entendido</button>
+         </div>
+      </div>
    {/if}
 
    {#if guardas.aviso}
@@ -1567,6 +1719,60 @@
    }
    .barra-almacenamiento button:hover {
       background: color-mix(in srgb, var(--aviso-texto) 12%, transparent);
+   }
+   .barra-almacenamiento button.enlace {
+      width: auto;
+      height: auto;
+      margin: 0 0 0 4px;
+      padding: 2px 6px;
+      font-size: inherit;
+      font-weight: 600;
+      text-decoration: underline;
+   }
+
+   /* Informativa, no de alerta: abrir una entrega es lo normal para el profesor. */
+   .barra-solo-lectura {
+      flex-shrink: 0;
+      padding: 8px 14px;
+      background: var(--superficie-alta);
+      color: var(--texto-tenue);
+      border-bottom: 1px solid var(--borde);
+      font-size: 12.5px;
+      line-height: 1.4;
+   }
+   .barra-solo-lectura strong {
+      color: var(--texto);
+   }
+
+   .fondo-codigo {
+      position: fixed;
+      inset: 0;
+      z-index: 58;
+      background: rgb(0 0 0 / 0.6);
+      display: grid;
+      place-items: center;
+      padding: 20px;
+   }
+   .caja-codigo {
+      width: min(400px, 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: var(--superficie);
+      border: 1px solid var(--borde);
+      border-radius: 16px;
+      padding: 20px;
+   }
+   .caja-codigo button {
+      border: 0;
+      background: var(--acento);
+      color: #04140b;
+      font-weight: 650;
+      padding: 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 15px;
+      font-family: inherit;
    }
 
    /* --- Móvil: una vista a la vez ------------------------------------- */

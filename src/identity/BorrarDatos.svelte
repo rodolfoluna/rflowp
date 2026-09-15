@@ -20,11 +20,16 @@
       guardados: number;
       /** ¿Está configurada la llave del curso? Cambia qué se puede recuperar. */
       hayLlaveDeProfesor: boolean;
+      /**
+       * ¿Tiene PIN? Cambia por completo qué pasa con sus archivos: con PIN
+       * vuelven a abrirse entrando con número y PIN; sin él, la llave se pierde.
+       */
+      tienePin: boolean;
       onConfirmar: () => void;
       onCancelar: () => void;
    }
 
-   let { identidad, guardados, hayLlaveDeProfesor, onConfirmar, onCancelar }: Props =
+   let { identidad, guardados, hayLlaveDeProfesor, tienePin, onConfirmar, onCancelar }: Props =
       $props();
 
    const PALABRA = 'BORRAR';
@@ -55,23 +60,38 @@
                  ? '1 algoritmo guardado dentro de la app.'
                  : `${guardados} algoritmos guardados dentro de la app.`}
          </li>
-         <li>Tu llave personal, la que cifra y firma tus algoritmos.</li>
+         <li>
+            {tienePin
+               ? 'Tu llave en este aparato. Tu PIN no se guarda en ningún lado.'
+               : 'Tu llave personal, la que cifra tus algoritmos.'}
+         </li>
       </ul>
 
       <p class="fuerte">Esto no se puede deshacer.</p>
 
-      <p class="nota" class:grave={!hayLlaveDeProfesor}>
-         Los archivos <code>.algx</code> que ya hayas exportado
-         <strong>dejarán de abrirse en esta app para siempre</strong>, aunque vuelvas a
-         escribir tu nombre y tu número de control: la llave que los cifró se destruye
-         ahora y no hay forma de recuperarla.
-         {#if hayLlaveDeProfesor}
-            Tu profesor sí podrá abrirlos con la llave del curso.
-         {:else}
-            Y como <strong>no tienes configurada la llave del curso</strong>, tampoco tu
-            profesor podrá abrirlos. Nadie podrá.
-         {/if}
-      </p>
+      {#if tienePin}
+         <p class="nota">
+            Los archivos <code>.algx</code> que ya hayas exportado
+            <strong>se pueden volver a abrir</strong> entrando otra vez con tu número de
+            control y tu mismo PIN, aquí o en otro aparato. Si olvidas el PIN,
+            {hayLlaveDeProfesor
+               ? 'solo tu profesor podrá abrirlos.'
+               : 'nadie podrá abrirlos: no tienes configurada la llave del curso.'}
+         </p>
+      {:else}
+         <p class="nota" class:grave={!hayLlaveDeProfesor}>
+            Los archivos <code>.algx</code> que ya hayas exportado
+            <strong>dejarán de abrirse en esta app para siempre</strong>, aunque vuelvas a
+            escribir tu nombre y tu número de control: se hicieron antes de que existiera el
+            PIN y la llave que los cifró se destruye ahora.
+            {#if hayLlaveDeProfesor}
+               Tu profesor sí podrá abrirlos con la llave del curso.
+            {:else}
+               Y como <strong>no tienes configurada la llave del curso</strong>, tampoco tu
+               profesor podrá abrirlos. Nadie podrá.
+            {/if}
+         </p>
+      {/if}
 
       <label>
          <span>Escribe <strong>{PALABRA}</strong> para confirmar</span>

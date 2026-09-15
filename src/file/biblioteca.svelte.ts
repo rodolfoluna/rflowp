@@ -10,7 +10,8 @@
  */
 
 import type { Identidad } from '../identity/identidad';
-import type { LlavesAlumno } from '../crypto/llaves';
+import { tipoDeLlave, type LlavesAlumno } from '../crypto/llaves';
+import { DERIVACION, type TipoLlave } from '../crypto/identidad-llave';
 import {
    cifrar,
    descifrar,
@@ -73,9 +74,14 @@ export interface ResumenArchivo {
    /** Quién dice haberlo hecho. */
    autor: string;
    numeroControl: string;
-   /** ¿Lo escribió esta instalación? Lo demás se marca como ajeno. */
+   /**
+    * ¿Es del alumno que usa la app? Lo es si lo hizo este aparato o si lleva su
+    * número de control: con el PIN, lo hecho en su otro aparato también es suyo.
+    */
    propio: boolean;
    cifrado: boolean;
+   /** Con qué llave se cifró. `'aparato'` en uno propio = pendiente de convertir. */
+   llave?: TipoLlave;
    /**
     * Huella de la llave de firma. Dos entregas con la misma huella salieron de
     * la misma instalación: es la señal más útil para detectar copias.
@@ -100,7 +106,20 @@ export interface ArchivoAbierto {
    firmaValida: boolean;
 }
 
+/** Resultado de convertir los archivos viejos a la llave con PIN. */
+export interface ResultadoConversion {
+   convertidos: number;
+   /** Propios que no se pudieron abrir en este aparato: se hicieron en otro. */
+   noSePudieron: number;
+}
+
 export class Biblioteca {
+   /**
+    * Número de control de quien usa la app ahora. Decide qué es «propio» y a
+    * quién no se le deja sobrescribir un archivo ajeno.
+    */
+   titular = $state<string | null>(null);
+
    #archivos = $state.raw<ResumenArchivo[]>([]);
    #cargando = $state(false);
    #error = $state<string | null>(null);
@@ -151,8 +170,12 @@ export class Biblioteca {
                   modificado: encabezado.modificado,
                   autor: encabezado.autor.nombre,
                   numeroControl: encabezado.autor.numeroControl,
-                  propio: !deviceIdActual || encabezado.deviceId === deviceIdActual,
+                  propio:
+                     (!deviceIdActual && !this.titular) ||
+                     encabezado.deviceId === deviceIdActual ||
+                     encabezado.autor.numeroControl === this.titular,
                   cifrado: carga.cifrado,
+                  ...(carga.cifrado ? { llave: carga.sobre.llave ?? 'aparato' } : {}),
                   huella: carga.cifrado ? await huellaDeFirma(carga.sobre.firmaPub) : undefined,
                   tamano: entrada.tamano,
                });
@@ -178,7 +201,11 @@ export class Biblioteca {
     * olvidaría justo al entregar.
     */
    async construir(
-      opciones: ContenidoAGuardar & { creado?: string },
+      opciones: ContenidoAGuardar & {
+         creado?: string;
+         /** Para conservar la fecha de modificación al convertir. */
+         modificado?: string;
+      },
    ): Promise<{ encabezado: Encabezado; texto: string }> {
       const { alumno, profesorPublica } = this.cripto();
       if (!alumno) {
@@ -196,6 +223,7 @@ export class Biblioteca {
          appVersion: this.appVersion,
          alg: ESQUEMA,
          creado: opciones.creado,
+         ...(opciones.modificado ? { ahora: () => new Date(opciones.modificado!) } : {}),
       });
 
       const sobre = await cifrar({
@@ -205,6 +233,7 @@ export class Biblioteca {
          firmaPublica: alumno.firmaPublicaJwk,
          profesorPublica,
          encabezadoCanonico: encabezadoCanonico(encabezado),
+         tipoLlave: tipoDeLlave(alumno),
       });
 
       return { encabezado, texto: serializarCifrado(encabezado, sobre) };
@@ -223,11 +252,23 @@ export class Biblioteca {
       if (opciones.id) {
          const previo = await this.almacen.leer(opciones.id);
          if (previo) {
+            let encabezadoPrevio: Encabezado | undefined;
             try {
-               creado = deserializar(previo).encabezado.creado;
+               encabezadoPrevio = deserializar(previo).encabezado;
             } catch {
                // Archivo previo ilegible: se guarda como si fuera nuevo.
             }
+
+            // El archivo pertenece a su número de control. Sobrescribirlo con
+            // otro número borraría quién lo hizo: es justo lo que pasaba cuando
+            // el profesor abría una entrega y pulsaba Guardar.
+            const dueno = encabezadoPrevio?.autor.numeroControl;
+            if (dueno && dueno !== opciones.identidad.numeroControl) {
+               throw new ErrorArchivo(
+                  `Este cuaderno es de ${encabezadoPrevio!.autor.nombre} (${dueno}) y no se puede guardar con otro número de control.`,
+               );
+            }
+            creado = encabezadoPrevio?.creado;
          }
       }
 
@@ -265,6 +306,8 @@ export class Biblioteca {
          sobre: carga.sobre,
          encabezadoCanonico: encabezadoCanonico(encabezado),
          llaveAlumno: alumno?.maestra ?? null,
+         // La llave del aparato de antes del PIN: abre lo que se hizo con ella.
+         otrasLlavesAlumno: [alumno?.legado ?? null],
          profesorPrivada,
       });
 
@@ -281,6 +324,69 @@ export class Biblioteca {
          como: resultado.como,
          firmaValida: resultado.firmaValida,
       };
+   }
+
+   /** Propios que siguen cifrados con la llave del aparato. */
+   get pendientesDeConvertir(): number {
+      return this.#archivos.filter((a) => a.cifrado && a.propio && a.llave !== DERIVACION)
+         .length;
+   }
+
+   /**
+    * Vuelve a cifrar con la llave del PIN los archivos propios que usan la del
+    * aparato, para que se abran también en los otros aparatos del alumno.
+    *
+    * Se conserva todo lo que es evidencia: contenido y bitácora tal cual, autor
+    * y fechas del encabezado. La firma es otra vez la del aparato, así que su
+    * huella no cambia. Cada archivo se reescribe por separado: si uno falla, el
+    * original queda intacto.
+    */
+   async convertirPendientes(identidad: Identidad): Promise<ResultadoConversion> {
+      const { alumno } = this.cripto();
+      if (!alumno || tipoDeLlave(alumno) !== DERIVACION) {
+         throw new ErrorArchivo('Primero crea tu PIN.');
+      }
+
+      let convertidos = 0;
+      let noSePudieron = 0;
+
+      for (const resumen of this.#archivos) {
+         if (!resumen.cifrado || !resumen.propio || resumen.llave === DERIVACION) continue;
+         // Solo lo que lleva su número: lo hecho en este aparato por otra
+         // identidad no se convierte a nombre de nadie.
+         if (resumen.numeroControl !== identidad.numeroControl) continue;
+
+         try {
+            const abierto = await this.abrir(resumen.id);
+            if (abierto.como !== 'alumno') {
+               noSePudieron += 1;
+               continue;
+            }
+            const { texto } = await this.construir({
+               contenido: abierto.contenido,
+               titulo: abierto.encabezado.titulo,
+               identidad: {
+                  ...identidad,
+                  // El autor queda como estaba escrito en el archivo.
+                  nombre: abierto.encabezado.autor.nombre,
+                  ...(abierto.encabezado.autor.grupo
+                     ? { grupo: abierto.encabezado.autor.grupo }
+                     : {}),
+                  deviceId: abierto.encabezado.deviceId,
+               },
+               creado: abierto.encabezado.creado,
+               modificado: abierto.encabezado.modificado,
+            });
+            await this.almacen.guardar(resumen.id, texto);
+            convertidos += 1;
+         } catch {
+            // Hecho en otro aparato antes del PIN: aquí no hay con qué abrirlo.
+            noSePudieron += 1;
+         }
+      }
+
+      await this.refrescar(identidad.deviceId);
+      return { convertidos, noSePudieron };
    }
 
    async borrar(id: string, deviceIdActual?: string): Promise<void> {

@@ -1,16 +1,25 @@
 <script lang="ts">
    /**
-    * Primer arranque: se piden número de control y nombre, una sola vez.
+    * Primer arranque en un aparato: número de control, nombre y PIN.
     *
-    * No es una pantalla de registro: no hay cuenta, no hay contraseña y nada
-    * sale del dispositivo. Se explica en la propia pantalla, porque un
-    * formulario que pide datos personales sin decir para qué genera
+    * No es una pantalla de registro: no hay cuenta y nada sale del aparato. El
+    * PIN no se guarda ni se envía: junto con el número de control calcula la
+    * llave que abre los archivos del alumno, y por eso el mismo número y el
+    * mismo PIN sirven en cualquiera de sus aparatos. Se explica en la propia
+    * pantalla, porque un formulario que pide datos sin decir para qué genera
     * desconfianza con razón.
     */
    import { validar, type ErrorValidacion } from './identidad';
+   import { erroresPinDoble } from '../crypto/identidad-llave';
+   import PinDoble from './PinDoble.svelte';
 
    interface Props {
-      onListo: (datos: { numeroControl: string; nombre: string; grupo?: string }) => void;
+      onListo: (datos: {
+         numeroControl: string;
+         nombre: string;
+         grupo?: string;
+         pin: string;
+      }) => Promise<void>;
    }
 
    let { onListo }: Props = $props();
@@ -18,6 +27,10 @@
    let numeroControl = $state('');
    let nombre = $state('');
    let grupo = $state('');
+   let pin = $state('');
+   let confirmacion = $state('');
+   let preparando = $state(false);
+   let fallo = $state<string | null>(null);
 
    /** Los errores no se muestran hasta que el alumno intenta continuar. */
    let intentado = $state(false);
@@ -28,11 +41,19 @@
          intentado ? errores.find((e) => e.campo === campo)?.mensaje : undefined,
    );
 
-   function enviar(e: SubmitEvent) {
+   async function enviar(e: SubmitEvent) {
       e.preventDefault();
       intentado = true;
-      if (errores.length > 0) return;
-      onListo({ numeroControl, nombre, grupo });
+      if (errores.length > 0 || Object.keys(erroresPinDoble(pin, confirmacion)).length > 0) return;
+
+      preparando = true;
+      fallo = null;
+      try {
+         await onListo({ numeroControl, nombre, grupo, pin });
+      } catch (err) {
+         fallo = err instanceof Error ? err.message : 'No se pudo preparar tu llave.';
+         preparando = false;
+      }
    }
 </script>
 
@@ -45,9 +66,14 @@
 
       <h1>Antes de empezar</h1>
       <p class="intro">
-         Tus datos se guardan <strong>solo en este dispositivo</strong> y se incluyen en los
+         Tus datos se guardan <strong>solo en este aparato</strong> y se incluyen en los
          algoritmos que crees, para que tu profesor sepa que son tuyos. No se envían a
          ningún servidor ni hay que crear una cuenta.
+      </p>
+
+      <p class="otro-aparato">
+         <strong>¿Ya usas RFlowP en otro aparato?</strong> Escribe el mismo número de control
+         y el mismo PIN: así tus archivos se abren en los dos.
       </p>
 
       <label class="campo">
@@ -87,11 +113,20 @@
          {/if}
       </label>
 
-      <button type="submit">Empezar</button>
+      <PinDoble bind:pin bind:confirmacion {intentado} />
+
+      {#if fallo}
+         <p class="error-general" role="alert">{fallo}</p>
+      {/if}
+
+      <button type="submit" disabled={preparando}>
+         {preparando ? 'Preparando tu llave…' : 'Empezar'}
+      </button>
 
       <p class="aviso">
-         Escríbelos bien: aparecerán en todo lo que entregues. Puedes borrarlos después
-         desde el menú, pero eso hará que tus algoritmos guardados dejen de abrirse.
+         Escribe bien tu número de control: aparecerá en todo lo que entregues. Tu PIN
+         <strong>no se puede recuperar</strong>: si lo olvidas, solo tu profesor podrá abrir
+         tus archivos. No uses tu fecha de nacimiento.
       </p>
    </form>
 </div>
@@ -207,5 +242,29 @@
       font-size: 12px;
       line-height: 1.5;
       color: var(--texto-debil);
+   }
+
+   .otro-aparato {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--texto-tenue);
+      background: var(--superficie-alta);
+      border-radius: 10px;
+      padding: 10px 12px;
+   }
+   .otro-aparato strong {
+      color: var(--texto);
+   }
+
+   .error-general {
+      margin: 0;
+      color: var(--error);
+      font-size: 13px;
+   }
+
+   button:disabled {
+      opacity: 0.7;
+      cursor: progress;
    }
 </style>

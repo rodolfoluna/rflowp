@@ -186,6 +186,9 @@ describe('avisos de licencia', () => {
       expect(avisos).toContain('Svelte Contributors');
       expect(avisos).toContain('Google LLC');
       expect(avisos).toContain('Victor Talamantes');
+      // hash-wasm calcula la llave del PIN, y su Argon2 viene de Go (BSD-3).
+      expect(avisos).toContain('Dani Biró');
+      expect(avisos).toContain('The Go Authors');
       expect(avisos).toContain('BSD 3-Clause');
 
       // Y que quede claro que el dialecto no implica código de PSeInt (GPLv2).

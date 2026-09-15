@@ -12,6 +12,9 @@ repositorio.
 |---|---|---|
 | [Svelte](https://svelte.dev) | MIT | Sí, en la app |
 | [Workbox](https://developer.chrome.com/docs/workbox) | MIT | Sí, en el service worker |
+| [hash-wasm](https://github.com/Daninet/hash-wasm) | MIT | Sí, en la app (Argon2id del PIN) |
+| · su Argon2, basado en [Go](https://pkg.go.dev/golang.org/x/crypto/argon2) | BSD 3-Clause | Sí, dentro de hash-wasm |
+| · su BLAKE2b | CC0 (a elegir con OpenSSL/Apache 2.0) | Sí, dentro de hash-wasm |
 | [PseudoFlow](https://github.com/talamantesvictor/pseudoflow) | BSD 3-Clause | Material adaptado |
 | Vite, TypeScript, Vitest, Sass… | Varias permisivas | No |
 
